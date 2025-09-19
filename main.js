@@ -1,6 +1,7 @@
 // ============== 1. 初始化部分 ==============
 // Supabase客户端初始化
 const WORKER_URL = 'https://xinya888.162004332.workers.dev/'; // Worker URL
+let supabaseClient;
 
 // 创建自定义的 Supabase 客户端
 function createSupabaseClient() {
@@ -44,7 +45,8 @@ async function sendRequest(method, path, data = null) {
 }
 try {
   // 初始化 Supabase 客户端
-  const supabaseClient = createSupabaseClient();
+  supabaseClient = createSupabaseClient();
+   if(supabaseClient) console.log('Supabase client initialized successfully.',supabaseClient);
 } catch (error) {
   showRoundedAlert('系统初始化失败，请刷新页面或联系管理员', 'error'); // 替换alert
 }
@@ -2796,4 +2798,5 @@ function initToggleButtonPositioning() {
   }
   
   updateButtonPosition();// 初始位置
+
 }
