@@ -1,6 +1,6 @@
 // ============== 1. 初始化部分 ==============
 // Supabase客户端初始化
-const WORKER_URL = 'https://xinya888.162004332.workers.dev/'; // Worker URL
+const WORKER_URL = 'https://xinya888.162004332.workers.dev'; // Worker URL
 let supabaseClient;
 
 // 创建自定义的 Supabase 客户端
@@ -8,19 +8,135 @@ function createSupabaseClient() {
   return {
     from: (table) => {
       return {
-        select: (query) => sendRequest('GET', `${table}?${new URLSearchParams(query).toString()}`),
+        select: (query) => {
+          // 将查询对象转换为URL参数
+          const params = new URLSearchParams();
+          for (const [key, value] of Object.entries(query)) {
+            if (typeof value === 'object' && value !== null) {
+              // 处理范围查询
+              if (value.gte && value.lte) {
+                params.append(key, `gte.${value.gte}`);
+                params.append(key, `lte.${value.lte}`);
+              }
+            } else {
+              params.append(key, `eq.${value}`);
+            }
+          }
+          return sendRequest('GET', `${table}?${params.toString()}`);
+        },
         insert: (data) => sendRequest('POST', table, data),
-        update: (data) => sendRequest('PATCH', table, data),
-        delete: () => sendRequest('DELETE', table),
+        update: (data) => {
+          // 更新操作需要指定条件，这里简化处理
+          const params = new URLSearchParams();
+          if (data.id) {
+            params.append('id', `eq.${data.id}`);
+          }
+          return sendRequest('PATCH', `${table}?${params.toString()}`, data);
+        },
+        delete: () => {
+          // 删除操作需要指定条件，这里简化处理
+          return sendRequest('DELETE', table);
+        },
       };
     },
-    // 可以根据需要添加其他方法
+    
+    // 在auth对象中的各个方法中添加token处理
+    auth: {
+      // 获取当前用户
+      getUser: async () => {
+        try {
+          const response = await sendRequest('GET', 'auth/user');
+          return response;
+        } catch (error) {
+          console.error('Get user error:', error);
+          // 清除无效的token
+          if (error.message.includes('401') || error.message.includes('403')) {
+            localStorage.removeItem('supabase.auth.token');
+          }
+          throw error;
+        }
+      },
+      
+      // 密码登录
+      signInWithPassword: async (credentials) => {
+        try {
+          const response = await sendRequest('POST', 'auth/login', {
+            email: credentials.email,
+            password: credentials.password
+          });
+          
+          // 存储token
+          if (response.access_token) {
+            localStorage.setItem('supabase.auth.token', JSON.stringify(response));
+          }
+          
+          return response;
+        } catch (error) {
+          console.error('Sign in error:', error);
+          throw error;
+        }
+      },
+      
+      // 注册
+      signUp: async (credentials) => {
+        try {
+          const response = await sendRequest('POST', 'auth/signup', {
+            email: credentials.email,
+            password: credentials.password,
+            phone: credentials.phone
+          });
+          
+          // 存储token
+          if (response.access_token) {
+            localStorage.setItem('supabase.auth.token', JSON.stringify(response));
+          }
+          
+          return response;
+        } catch (error) {
+          console.error('Sign up error:', error);
+          throw error;
+        }
+      },
+      
+      // 退出登录
+      signOut: async () => {
+        try {
+          const response = await sendRequest('POST', 'auth/logout');
+          // 清除token
+          localStorage.removeItem('supabase.auth.token');
+          return response;
+        } catch (error) {
+          console.error('Sign out error:', error);
+          throw error;
+        }
+      },
+      
+      // 重置密码
+      resetPasswordForEmail: async (email, options) => {
+        try {
+          const response = await sendRequest('POST', 'auth/reset-password', {
+            email,
+            redirectTo: options.redirectTo
+          });
+          return response;
+        } catch (error) {
+          console.error('Reset password error:', error);
+          throw error;
+        }
+      }
+    }
   };
 }
 
 // 发送请求到 Worker
 async function sendRequest(method, path, data = null) {
-  const url = `${WORKER_URL}/supabase/${path}`;
+  // 处理认证端点的特殊路径
+  let apiPath = path;
+  if (path.startsWith('auth/')) {
+    apiPath = path.replace('auth/', 'auth/v1/');
+  }
+  
+  const url = `${WORKER_URL}/${apiPath}`;
   const options = {
     method: method,
     headers: {
@@ -28,14 +144,45 @@ async function sendRequest(method, path, data = null) {
     },
   };
   
+  // 添加认证token（如果存在）
+  const token = localStorage.getItem('supabase.auth.token');
+  if (token && !path.startsWith('auth/')) {
+    try {
+      const parsedToken = JSON.parse(token);
+      if (parsedToken.access_token) {
+        options.headers['Authorization'] = `Bearer ${parsedToken.access_token}`;
+      }
+    } catch (e) {
+      console.error('Failed to parse token', e);
+    }
+  }
+  
   if (data) {
     options.body = JSON.stringify(data);
+  }
+  
+  // 处理GET请求的查询参数
+  if (method === 'GET' && data) {
+    const queryParams = new URLSearchParams();
+    for (const [key, value] of Object.entries(data)) {
+      if (typeof value === 'object' && value !== null) {
+        // 处理范围查询（如日期范围）
+        if (value.gte && value.lte) {
+          queryParams.append(key, `gte.${value.gte}`);
+          queryParams.append(key, `lte.${value.lte}`);
+        }
+      } else {
+        queryParams.append(key, `eq.${value}`);
+      }
+    }
+    url = `${url}?${queryParams.toString()}`;
   }
   
   try {
     const response = await fetch(url, options);
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
     }
     return await response.json();
   } catch (error) {
@@ -43,10 +190,11 @@ async function sendRequest(method, path, data = null) {
     throw error;
   }
 }
+
 try {
   // 初始化 Supabase 客户端
   supabaseClient = createSupabaseClient();
-   if(supabaseClient) console.log('Supabase client initialized successfully.',supabaseClient);
+  if(supabaseClient) console.log('Supabase client initialized successfully.',supabaseClient);
 } catch (error) {
   showRoundedAlert('系统初始化失败，请刷新页面或联系管理员', 'error'); // 替换alert
 }
@@ -156,18 +304,28 @@ function setDefaultDates() {
 }
 
 // **** 认证函数，用户状态显示****
+// 修改initAuth函数以正确处理用户认证状态
 async function initAuth() {
   if (!supabaseClient) {
     return false;
   }
 
   try {
-    const { data: { user: currentUser }, error } = await supabaseClient.auth.getUser();
+    // 检查本地是否有存储的token
+    const token = localStorage.getItem('supabase.auth.token');
+    if (!token) {
+      userStatus.style.display = 'none';
+      authContainer.style.display = 'block';
+      return false;
+    }
 
-    if (currentUser) {
-      user = currentUser;
+    // 使用token获取用户信息
+    const response = await supabaseClient.auth.getUser();
+    
+    if (response && response.user) {
+      user = response.user;
       // 显示用户状态 - 根据邮箱前缀映射到用户名
-      const emailPrefix = currentUser.email.split('@')[0]; // 获取邮箱前缀
+      const emailPrefix = user.email.split('@')[0];
       const usernameMap = {
         '162004332': '系统管理员',
         'rickyone': '数据管理员',
@@ -177,7 +335,7 @@ async function initAuth() {
         'coca_cola': '可口可乐',
         '15096086678': '娟子'
       };
-      // 如果邮箱前缀在映射表中，则使用映射的用户名，否则使用邮箱前缀
+      
       const displayName = usernameMap[emailPrefix] || emailPrefix;
       userName.textContent = displayName;
 
@@ -192,7 +350,9 @@ async function initAuth() {
       return false;
     }
   } catch (error) {
-    showRoundedAlert(`用户认证发生错误: ${error}`,'error');
+    console.error('Auth init error:', error);
+    userStatus.style.display = 'none';
+    authContainer.style.display = 'block';
     return false;
   }
 }
@@ -1047,37 +1207,45 @@ async function toggleDisplayMode() {
 }
 // ============== 7. 数据加载与处理 ==============
 // ****通用数据获取函数（支持分页）*****
+// 修改fetchRecords函数以使用正确的查询参数格式
 async function fetchRecords(tableName, fields, conditions = {}) {
   try {
-    const batchSize = 50000; // 每批次获取的记录数
-    let allData = []; // 存储所有数据
-    let from = 0; // 起始位置
-    let hasMore = true; // 是否还有更多数据
+    const batchSize = 50000;
+    let allData = [];
+    let from = 0;
+    let hasMore = true;
 
     // 构建基础查询
-    let baseQuery = supabaseClient
-      .from(tableName)
-      .select(fields.join(','));
+    let baseQuery = {
+      select: fields.join(',')
+    };
 
     // 应用查询条件
     Object.entries(conditions).forEach(([key, value]) => {
       if (Array.isArray(value)) {
-        baseQuery = baseQuery.in(key, value);
+        baseQuery[key] = `in.(${value.join(',')})`;
       } else if (value !== undefined) {
         if (typeof value === 'object' && value.gte && value.lte) {
-          baseQuery = baseQuery.gte(key, value.gte).lte(key, value.lte);
+          // 范围查询
+          baseQuery[key] = value;
         } else {
-          baseQuery = baseQuery.eq(key, value);
+          baseQuery[key] = `eq.${value}`;
         }
       }
     });
 
     // 分批次获取所有数据
     while (hasMore) {
-      // 创建当前批次的查询（复制基础查询并添加范围限制）
-      let query = baseQuery.range(from, from + batchSize - 1);
+      // 添加范围限制
+      const queryWithRange = {
+        ...baseQuery,
+        offset: from,
+        limit: batchSize
+      };
       
-      const { data, error } = await query;
+      const { data, error } = await supabaseClient
+        .from(tableName)
+        .select(queryWithRange);
       
       if (error) throw error;
       
@@ -2798,5 +2966,4 @@ function initToggleButtonPositioning() {
   }
   
   updateButtonPosition();// 初始位置
-
 }
