@@ -166,10 +166,8 @@ async function sendRequest(method, path, data = null) {
         // 修正等值查询参数格式
         queryParams.push(`${key}=${value}`);
       }
-      console.log('查询参数:', queryParams);      
     }
     url = `${url}?${queryParams.join('&')}`;
-    console.log('最终请求URL:', url);
 
   } else if (data && method !== 'GET') {
     // 对于非GET请求，将数据放在请求体中
@@ -205,7 +203,6 @@ async function sendRequest(method, path, data = null) {
 try {
   // 初始化 Supabase 客户端
   supabaseClient = createSupabaseClient();
-  if(supabaseClient) console.log('Supabase client initialized successfully.',supabaseClient);
 } catch (error) {
   showRoundedAlert('系统初始化失败，请刷新页面或联系管理员', 'error'); // 替换alert
 }
