@@ -9,29 +9,17 @@ function createSupabaseClient() {
     from: (table) => {
       return {
         select: (query) => {
-          // 将查询对象转换为URL参数
-          const params = new URLSearchParams();
-          for (const [key, value] of Object.entries(query)) {
-            if (typeof value === 'object' && value !== null) {
-              // 处理范围查询
-              if (value.gte && value.lte) {
-                params.append(key, `gte.${value.gte}`);
-                params.append(key, `lte.${value.lte}`);
-              }
-            } else {
-              params.append(key, `eq.${value}`);
-            }
-          }
-          return sendRequest('GET', `${table}?${params.toString()}`);
+          // 将查询对象传递给 sendRequest，GET 请求的参数会自动转换为查询字符串
+          return sendRequest('GET', table, query);
         },
         insert: (data) => sendRequest('POST', table, data),
         update: (data) => {
           // 更新操作需要指定条件，这里简化处理
-          const params = new URLSearchParams();
+          const params = {};
           if (data.id) {
-            params.append('id', `eq.${data.id}`);
+            params.id = `eq.${data.id}`;
           }
-          return sendRequest('PATCH', `${table}?${params.toString()}`, data);
+          return sendRequest('PATCH', table, { ...params, ...data });
         },
         delete: () => {
           // 删除操作需要指定条件，这里简化处理
@@ -136,7 +124,7 @@ async function sendRequest(method, path, data = null) {
     apiPath = path.replace('auth/', 'auth/v1/');
   }
   
-  const url = `${WORKER_URL}/${apiPath}`;
+  let url = `${WORKER_URL}/${apiPath}`;
   const options = {
     method: method,
     headers: {
@@ -146,7 +134,7 @@ async function sendRequest(method, path, data = null) {
   
   // 添加认证token（如果存在）
   const token = localStorage.getItem('supabase.auth.token');
-  if (token && !path.startsWith('auth/')) {
+  if (token) {
     try {
       const parsedToken = JSON.parse(token);
       if (parsedToken.access_token) {
@@ -157,25 +145,30 @@ async function sendRequest(method, path, data = null) {
     }
   }
   
-  if (data) {
-    options.body = JSON.stringify(data);
-  }
-  
   // 处理GET请求的查询参数
   if (method === 'GET' && data) {
-    const queryParams = new URLSearchParams();
+    // 对于GET请求，将数据转换为查询参数
+    const queryParams = [];
     for (const [key, value] of Object.entries(data)) {
       if (typeof value === 'object' && value !== null) {
         // 处理范围查询（如日期范围）
         if (value.gte && value.lte) {
-          queryParams.append(key, `gte.${value.gte}`);
-          queryParams.append(key, `lte.${value.lte}`);
+          // 对于日期范围查询，使用正确的格式
+          queryParams.push(`${encodeURIComponent(key)}=gte.${encodeURIComponent(value.gte)}`);
+          queryParams.push(`${encodeURIComponent(key)}=lte.${encodeURIComponent(value.lte)}`);
+        } else if (key === 'select') {
+          // 处理select参数 - 不进行encodeURIComponent，直接添加
+          queryParams.push(`select=${value}`);
         }
       } else {
-        queryParams.append(key, `eq.${value}`);
+        // 修正等值查询参数格式
+        queryParams.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
       }
     }
-    url = `${url}?${queryParams.toString()}`;
+    url = `${url}?${queryParams.join('&')}`;
+  } else if (data && method !== 'GET') {
+    // 对于非GET请求，将数据放在请求体中
+    options.body = JSON.stringify(data);
   }
   
   try {
@@ -184,7 +177,20 @@ async function sendRequest(method, path, data = null) {
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
     }
-    return await response.json();
+    
+    const responseData = await response.json();
+    
+    // 特殊处理 getUser 响应
+    if (apiPath === 'auth/v1/user') {
+      return { data: { user: responseData } };
+    }
+    
+    // 特殊处理登录和注册响应
+    if (apiPath === 'auth/v1/login' || apiPath === 'auth/v1/signup') {
+      return responseData;
+    }
+    
+    return responseData;
   } catch (error) {
     console.error('Request failed:', error);
     throw error;
@@ -322,8 +328,9 @@ async function initAuth() {
     // 使用token获取用户信息
     const response = await supabaseClient.auth.getUser();
     
-    if (response && response.user) {
-      user = response.user;
+    // 修复：检查response是否存在以及response.data.user是否存在
+    if (response && response.data && response.data.user) {
+      user = response.data.user;
       // 显示用户状态 - 根据邮箱前缀映射到用户名
       const emailPrefix = user.email.split('@')[0];
       const usernameMap = {
@@ -345,12 +352,16 @@ async function initAuth() {
       showRoundedAlert(`欢迎 ${displayName}！`, 'success');
       return true;
     } else {
+      // 清除无效的token
+      localStorage.removeItem('supabase.auth.token');
       userStatus.style.display = 'none';
       authContainer.style.display = 'block';
       return false;
     }
   } catch (error) {
     console.error('Auth init error:', error);
+    // 清除无效的token
+    localStorage.removeItem('supabase.auth.token');
     userStatus.style.display = 'none';
     authContainer.style.display = 'block';
     return false;
@@ -1226,10 +1237,10 @@ async function fetchRecords(tableName, fields, conditions = {}) {
         baseQuery[key] = `in.(${value.join(',')})`;
       } else if (value !== undefined) {
         if (typeof value === 'object' && value.gte && value.lte) {
-          // 范围查询
+          // 范围查询 - 保持对象格式，让 sendRequest 处理
           baseQuery[key] = value;
         } else {
-          baseQuery[key] = `eq.${value}`;
+          baseQuery[key] = value;
         }
       }
     });
@@ -1243,14 +1254,18 @@ async function fetchRecords(tableName, fields, conditions = {}) {
         limit: batchSize
       };
       
-      const { data, error } = await supabaseClient
+      const response = await supabaseClient
         .from(tableName)
         .select(queryWithRange);
       
-      if (error) throw error;
+      // 检查响应格式
+      if (response.error) throw response.error;
+      
+      // 确保data存在且为数组
+      const data = Array.isArray(response) ? response : (response.data || []);
       
       // 添加当前批次的数据
-      if (data && data.length > 0) {
+      if (data.length > 0) {
         allData = [...allData, ...data];
       }
       
@@ -2508,82 +2523,7 @@ function handleResponsiveLayout() {
 
 // ============== 9. 页面初始化 ==============
 document.addEventListener('DOMContentLoaded', async () => {
-  const progressBar = document.querySelector('.progress-bar');
-  const loadingText = document.querySelector('.loading-container p');
 
-  // 检查资源是否已加载的函数
-  const checkResource = (condition, name) => {
-      return new Promise((resolve) => {
-          const checkInterval = setInterval(() => {
-              if (condition) {
-                  clearInterval(checkInterval);
-                  resolve(name);
-              }
-          }, 100);
-          
-          // 超时处理（5秒后）
-          setTimeout(() => {
-              clearInterval(checkInterval);
-              resolve(null);
-          }, 5000);
-      });
-  };
-
-  // 定义要检查的资源
-  const resourcesToCheck = [
-      { condition: () => window.supabase, name: 'Supabase' },
-      { condition: () => window.Chart, name: 'Chart.js' },
-      { condition: () => window.ChartDataLabels, name: 'Datalabels插件' },
-      { condition: () => window.flatpickr, name: 'Flatpickr' }
-  ];
-
-  let loadedCount = 0;
-  const totalResources = resourcesToCheck.length;
-
-  // 更新初始进度
-  const initialProgress = (loadedCount / totalResources) * 100;
-  progressBar.style.width = initialProgress + '%';
-  loadingText.textContent = `正在初始化系统... (${loadedCount}/${totalResources})`;
-
-  // 检查每个资源
-  const checkPromises = resourcesToCheck.map(resource => 
-      checkResource(resource.condition(), resource.name)
-  );
-
-  for (let i = 0; i < checkPromises.length; i++) {
-      try {
-          await checkPromises[i];
-          loadedCount++;
-          const progress = (loadedCount / totalResources) * 100;
-          progressBar.style.width = progress + '%';
-          loadingText.textContent = `正在初始化系统... (${loadedCount}/${totalResources})`;
-      } catch (error) {
-          console.warn('资源检查超时:', resourcesToCheck[i].name);
-          loadedCount++;
-          const progress = (loadedCount / totalResources) * 100;
-          progressBar.style.width = progress + '%';
-      }
-  }
-
-  // 所有资源检查完成后
-  loadingText.textContent = '系统初始化完成...';
-
-  setTimeout(() => {
-      document.getElementById('mloading').style.display = 'none';
-      document.getElementById('header').style.display = 'none';
-  }, 300);
-
-  if (!supabaseClient) {
-    showRoundedAlert('错误: Supabase客户端未正确初始化');
-    queryBtn.disabled = true;
-    queryBtn.textContent = '系统未初始化';
-    queryBtn.style.background = '#e53e3e';
-    queryBtn.style.cursor = 'not-allowed';
-    loadingEl.innerHTML = '<p style="color: #e53e3e; padding: 1rem;">系统初始化失败，请刷新页面</p>';
-    loadingEl.style.display = 'block';
-    return;
-  }
-  
   // 初始化认证状态
   const isAuthenticated = await initAuth();
   // 添加切换仓库按钮事件监听
@@ -2632,40 +2572,46 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
     
-    const { data, error } = await supabaseClient.auth.signInWithPassword({
-      email,
-      password
-    });
-    showRoundedAlert('登录成功！', 'success');
-    if (error) {
-      showRoundedAlert(`登录失败: 请检查用户名或密码是否正确！`, 'error');
-      return;
+    try {
+      const response = await supabaseClient.auth.signInWithPassword({
+        email,
+        password
+      });
+      
+      if (!response || !response.access_token) {
+        showRoundedAlert(`登录失败: 请检查用户名或密码是否正确！`, 'error');
+        return;
+      }
+     
+      user = response.user;
+      showRoundedAlert('登录成功！', 'success');
+      // 显示用户状态 - 根据邮箱前缀映射到用户名
+      const emailPrefix = user.email.split('@')[0]; // 获取邮箱前缀
+      const usernameMap = {
+        '162004332': '系统管理员',
+        'rickyone': '数据管理员',
+        '13762405681': '王英',
+        'ksf2025': '康师傅',
+        'pepsi_cola': '百事可乐',
+        'coca_cola': '可口可乐',
+        '15096086678': '娟子'
+      };
+    
+      // 如果邮箱前缀在映射表中，则使用映射的用户名，否则使用邮箱前缀
+      const displayName = usernameMap[emailPrefix] || emailPrefix;
+      userName.textContent = displayName;
+      
+      userStatus.style.display = 'block';
+      authContainer.style.display = 'none';
+      appContainer.style.display = 'block';
+      showRoundedAlert(`欢迎 ${displayName}！`, 'success');
+      
+      // 登录成功后初始化应用
+      initializeApp();
+    } catch (err) {
+      console.error('Login error:', err);
+      showRoundedAlert(`登录过程中发生错误: ${err.message}`, 'error');
     }
-    
-    user = data.user;
-    // 显示用户状态 - 根据邮箱前缀映射到用户名
-    const emailPrefix = user.email.split('@')[0]; // 获取邮箱前缀
-    const usernameMap = {
-      '162004332': '系统管理员',
-      'rickyone': '数据管理员',
-      '13762405681': '王英',
-      'ksf2025': '康师傅',
-      'pepsi_cola': '百事可乐',
-      'coca_cola': '可口可乐',
-      '15096086678': '娟子'
-    };
-  
-    // 如果邮箱前缀在映射表中，则使用映射的用户名，否则使用邮箱前缀
-    const displayName = usernameMap[emailPrefix] || emailPrefix;
-    userName.textContent = displayName;
-    
-    userStatus.style.display = 'block';
-    authContainer.style.display = 'none';
-    appContainer.style.display = 'block';
-    showRoundedAlert(`欢迎 ${displayName}！`, 'success');
-    
-    // 登录成功后初始化应用
-    initializeApp();
   });
 
   // 添加回车键登录支持
