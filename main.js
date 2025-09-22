@@ -147,25 +147,30 @@ async function sendRequest(method, path, data = null) {
   
   // 处理GET请求的查询参数
   if (method === 'GET' && data) {
-    // 对于GET请求，将数据转换为查询参数
     const queryParams = [];
     for (const [key, value] of Object.entries(data)) {
       if (typeof value === 'object' && value !== null) {
         // 处理范围查询（如日期范围）
         if (value.gte && value.lte) {
-          // 对于日期范围查询，使用正确的格式
-          queryParams.push(`${encodeURIComponent(key)}=gte.${encodeURIComponent(value.gte)}`);
-          queryParams.push(`${encodeURIComponent(key)}=lte.${encodeURIComponent(value.lte)}`);
+          // 修正：使用正确的 Supabase 范围查询格式
+          queryParams.push(`${key}=gte.${value.gte}`);
+          queryParams.push(`${key}=lte.${value.lte}`);
         } else if (key === 'select') {
-          // 处理select参数 - 不进行encodeURIComponent，直接添加
+          // 处理select参数
           queryParams.push(`select=${value}`);
+        } else if (key === 'offset' || key === 'limit') {
+          // 直接添加 offset 和 limit 参数
+          queryParams.push(`${key}=${value}`);
         }
       } else {
         // 修正等值查询参数格式
-        queryParams.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
+        queryParams.push(`${key}=${value}`);
       }
+      console.log('查询参数:', queryParams);      
     }
     url = `${url}?${queryParams.join('&')}`;
+    console.log('最终请求URL:', url);
+
   } else if (data && method !== 'GET') {
     // 对于非GET请求，将数据放在请求体中
     options.body = JSON.stringify(data);
