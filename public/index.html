@@ -1,0 +1,1827 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>销售数据查询系统</title>
+  <style>
+    :root {
+      --primary: #4361ee;
+      --secondary: #3f37c9;
+      --success: #4cc9f0;
+      --light: #f8f9fa;
+      --dark: #212529;
+      --card-bg: #ffffff;
+      --border: #e2e8f0;
+      --shadow: rgba(0, 0, 0, 0.1);
+      --text-primary: #333333;
+      --text-secondary: #6c757d;
+      --clear-hover: #e53e3e;
+    }
+    
+    * { 
+      box-sizing: border-box; 
+      margin: 0; 
+      padding: 0; 
+    }
+    
+    body { 
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+      line-height: 1.15; /* 提高可读性 */
+      color: var(--text-primary); 
+      background: linear-gradient(135deg, #f5f7fa 0%, #e4edf5 100%);
+      padding: 10px 5px; 
+      min-height: 100vh; 
+      overflow-x: hidden ; /* 防止水平滚动 */
+    }
+    
+    .container { 
+      max-width: 1400px; 
+      margin: 0 auto; 
+    }
+    .loading-container {
+        text-align: center;
+        padding: 40px 20px;
+    }    
+    
+    header, mheader { 
+      background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%); 
+      color: white; 
+      padding: 1.6rem 1.8rem; 
+      border-radius: 12px; 
+      margin-bottom: 0.5rem; 
+      box-shadow: 0 6px 15px rgba(67, 97, 238, 0.3);
+      position: relative;
+    }
+    
+    h1 { 
+      font-size: 2.4rem; 
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    
+    .card { 
+      background: var(--card-bg); 
+      border-radius: 12px; 
+      box-shadow: 0 4px 12px var(--shadow); 
+      margin-bottom:0.3rem; 
+      overflow: visible; 
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+      background: linear-gradient(135deg, #e0f7ff 0%, #f0f9ff 100%);
+      border: 1px solid #d1e9ff;      
+    }
+    
+    .card:hover {
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+    }
+    
+    .card-header { 
+      padding: 0.8rem 1.8rem; 
+      background-color: #f8fafc; 
+      border-bottom: 1px solid var(--border); 
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-radius: 12px 12px 0 0; 
+    }
+    
+    .card-header h2 {
+      font-size: 1.5rem;
+      color: var(--primary);
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .card-body { 
+      padding: 1.2rem; 
+      overflow: visible;
+    }
+
+    .placeholder{
+      font-weight: 400;
+    }
+    
+    /* 详细销售记录 */
+    #detailcardBody {
+      padding: 0 ;
+    }
+    .filters-row { 
+      display: grid; 
+      grid-template-columns: 240px 240px 240px  1fr;
+      gap: 15px; 
+      margin-bottom: 1.5rem; 
+    }
+    /* 新增隆桥仓库专属样式 */
+    .filters-row.longqiao {
+        grid-template-columns: 230px 200px 200px 230px 1fr;
+    }   
+    /* 修改包含总金额的卡片内边距 */
+    .stat-card:has(#totalAmount) {
+      padding-left: 0.1rem !important;
+      padding-right: 0.1rem !important;
+    }           
+
+    .filter-group { 
+      display: inline-flex;       /* 改为 inline-flex 才能生效 flex-direction */
+      flex-direction: column; 
+      position: relative;
+    }
+
+    label { 
+      font-weight: 600; 
+      font-size: 1.2rem; 
+      margin-bottom: 0.6rem; 
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    input, select { 
+      padding: 0.8rem; 
+      border: 1px solid var(--border); 
+      border-radius: 8px; 
+      font-size: 1.1rem !important; 
+      background: white;
+      transition: border-color 0.3s, box-shadow 0.3s;
+      width: 100%;
+    }
+    
+    select {
+      background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%234361ee'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 0.75rem center;
+      background-size: 16px 12px;
+      appearance: none;
+      padding-right: 2.5rem;
+    }
+    
+    input:focus, select:focus {
+      border-color: var(--primary);
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.2);
+    }
+    
+    button { 
+      background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%); 
+      color: white; 
+      border: none; 
+      padding: 0.85rem 1.8rem; 
+      border-radius: 8px; 
+      cursor: pointer; 
+      font-size: 1.2rem; 
+      font-weight: 600; 
+      transition: all 0.3s ease; 
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 4px 10px rgba(67, 97, 238, 0.3);
+    }
+    
+    button:hover { 
+      transform: translateY(-2px); 
+      box-shadow: 0 6px 12px rgba(67, 97, 238, 0.3);
+    }
+
+    .btn-secondary {
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      color: white;
+      border: 1px solid var(--border);
+    }
+    
+    .btn-secondary:hover {
+      background: linear-gradient(135deg, #059669 0%, #047857 100%);
+      box-shadow: 0 6px 12px rgba(5, 150, 105, 0.3);
+    }
+
+    .btn-query:hover {
+        background: linear-gradient(135deg, #3a55d4 0%, #3630b0 100%);
+        box-shadow: 0 6px 15px rgba(58, 85, 212, 0.4);
+    }  
+    
+    #switchWarehouseBtn {
+      background: linear-gradient(135deg, #FF9F40 0%, #FF7F00 100%) !important;
+      box-shadow: 0 4px 10px rgba(255, 159, 64, 0.25);
+    }
+
+    #switchWarehouseBtn:hover {
+      background: linear-gradient(135deg, #FF7F00 0%, #FF6600 100%) !important;
+      box-shadow: 0 6px 12px rgba(255, 127, 0, 0.4);
+    }
+
+    /* 添加仓库图标的橙色悬停效果 */
+    #switchWarehouseBtn:hover .fa-warehouse {
+      color: #fff;
+      filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.5));
+    }    
+
+    /* 多选下拉框样式 - 优化合并 */
+    .custom-multiselect {
+      position: relative;
+      /*width: 100%;*/
+    }
+    
+    .select-box {
+      position: relative;
+      padding: 0.6rem 1rem 0.6rem 1rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: white;
+      display: flex;
+      align-items: flex-start; /* 顶部对齐 */
+      cursor: pointer;
+      z-index: 1;
+      min-height:1.2rem;
+      transition: border-color 0.3s, box-shadow 0.3s;
+      overflow: hidden;/* 超出部分隐藏 */
+      
+      /* 悬停效果 */
+      &:hover {
+        border-color: var(--primary);
+      }
+      
+      /* 选中项显示区域 */
+      .selected-display {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        padding: 2px 0;
+        /* width: 100%;*/
+        min-height: 26px; /* 最小高度 */
+        max-height: 130px; /* 最大高度 */
+        overflow-y: auto; /* 内容过多时滚动 */
+        
+        .tag {
+          background-color: #eef2ff;
+          color: var(--primary);
+          border-radius: 16px;
+          padding: 4px 4px 4px 8px;  /* 上、右、下、左 */
+          font-size: 0.85rem;
+          display: flex;
+          align-items: center;
+          white-space: nowrap; /* 防止文字自动换行 */
+          height: 26px;
+          cursor: text;
+        }
+
+        .tag:hover {
+          background-color: #dbe4ff; /* 更深的背景色 */
+        }
+
+        .tag-remove {
+          margin-left: 6px;
+          cursor: pointer;
+          font-size: 0.9rem;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          color: #999;
+          padding: 2px; /* 增加可点击区域 */
+          border-radius: 50%; /* 圆形区域更易点击 */
+          transition: all 0.2s ease; /* 添加过渡效果 */
+
+          &:hover {
+            color: #e53e3e; /* 更明显的悬停颜色 */
+            transform: scale(1.1); /* 悬停时轻微放大 */
+          }
+        }
+        
+        .more-tag {
+          background-color: #f0f4f8;
+          color: var(--text-secondary);
+          border-radius: 16px;
+          padding: 4px 8px;
+          font-size: 0.8rem;
+          white-space: nowrap;
+        }
+      }
+      
+      .placeholder {
+        color: var(--text-secondary);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        flex: 1;
+      }
+      
+      .arrow {
+        position: absolute;
+        right: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        transition: transform 0.3s;
+        /* pointer-events: none; /* 防止点击箭头时关闭下拉 */
+      }
+      
+      .clear-btn {
+        position: absolute;
+        right: 8px;
+        transform: translateY(-50%);
+        cursor: pointer;
+        color: #999;
+        display: none;
+        transition: color 0.2s, transform 0.2s; /* 添加 transform 到过渡效果 */
+        
+        /* 设置变换的原点为顶部中心 */
+        transform-origin: top center;
+        
+        &:hover {
+          color: var(--clear-hover);
+          /* 合并两个变换：保持垂直居中并缩放 */
+          transform: translateY(-50%) scale(1.2);
+        }
+      }
+    }
+    
+    /* 当有选中项时显示清除按钮 */
+    .select-box.has-selection .clear-btn {
+      display: block;
+    }
+
+    /* 下拉菜单容器 */
+    .options-container {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      width: 100%;
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+      max-height: 200px;
+      overflow-y: auto;
+      z-index: 1000;
+      display: none;
+      padding: 4px 0;
+      margin-top: 5px;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity 0.3s ease, transform 0.3s ease;      
+    }
+    
+    /* 修复悬停闪烁问题 */
+    .options-container.visible {
+      display: block;
+      opacity: 1;
+      transform: translateY(0);
+    }
+    
+    .option {
+      padding: 0.5rem 1.25rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      transition: background 0.2s;
+      
+      &:hover {
+        background-color: #f0f4f8;
+      }
+      
+      &.selected {
+        background-color: #eef2ff;
+      }
+      
+      input { /* 复选框样式 */
+        margin-right: 10px;
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+      }
+      
+      label {
+        margin: 0;
+        flex: 1;
+        cursor: pointer;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-size: 1.1rem;
+        font-weight: 400;
+      }
+    }
+    
+    /* 表格样式 */
+    table { 
+      width: 100%; 
+      border-collapse: separate; 
+      border-spacing: 0;
+      background: white;
+      border-radius: 10px;
+      overflow: visible; /* 允许溢出显示阴影(固定表头用) */
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    }
+    
+    th, td { 
+      padding: 0.8rem; 
+      text-align: left; 
+      border-bottom: 1px solid var(--border); 
+    }
+    
+    th { 
+      background-color: #f1f5fd; 
+      font-weight: 600; 
+      color: var(--primary);
+      position: sticky;
+      top: 0;
+    }
+    
+    tr:hover { 
+      background-color: #f8fafc; 
+    }
+    
+    /* 统计卡片 */
+    .summary-stats { 
+      display: grid; 
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); 
+      gap: 1.5rem;
+      margin-bottom: 1.2rem; 
+    }
+    
+    .stat-card {
+      background: white;
+      border-radius: 10px;
+      padding: 1.5rem;
+      text-align: center;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+      border-left: 4px solid var(--primary);
+      transition: transform 0.3s;
+      
+      &:hover {
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+      }
+    }
+    
+    .stat-value {
+      font-size: clamp(1.2rem, 4.5vw, 2.2rem); /* 使用clamp函数实现响应式字体大小 */
+      font-weight: 700;
+      color: var(--primary);
+      margin-top: 0.5rem;
+    }
+    
+    .stat-label {
+      font-size: 1.2rem;
+      color: var(--text-secondary);
+      font-weight: bold;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    }
+    
+    .summary-card {  /*淡蓝色背景 */
+      background: linear-gradient(135deg, #e0f7ff 0%, #f0f9ff 100%);
+      border: 1px solid #d1e9ff;
+    }
+    
+    /* 加载动画 */
+    .loading {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(12px);
+      border-radius: 24px;
+      padding: 2.5rem;
+      text-align: center;
+      z-index: 1000;
+      box-shadow: 
+        0 8px 32px rgba(31, 38, 135, 0.2),
+        0 0 0 1px rgba(255, 255, 255, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.5);
+      overflow: hidden;
+    }
+
+    /* 添加玻璃态效果伪元素 */
+    .loading::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(
+        135deg, 
+        rgba(255, 255, 255, 0.4) 0%, 
+        rgba(255, 255, 255, 0.1) 100%
+      );
+      z-index: -1;
+      border-radius: 24px;
+    }
+
+    /* 新的旋转动画 */
+    .spinner {
+      position: relative;
+      width: 70px;
+      height: 70px;
+      margin: 0 auto 1.8rem;
+    }
+
+    .spinner::before,
+    .spinner::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      border: 4px solid transparent;
+      animation: spin 1.5s linear infinite;
+    }
+
+    .spinner::before {
+      border-top-color: #4361ee;
+      border-right-color: #4361ee;
+      animation-delay: -0.5s;
+    }
+
+    .spinner::after {
+      border-bottom-color: #3f37c9;
+      border-left-color: #3f37c9;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    /* 添加脉冲效果 */
+    @keyframes pulse {
+      0% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.05); opacity: 0.8; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    .loading p {
+      font-size: 1.2rem;
+      color: #4a5568;
+      font-weight: 500;
+      animation: pulse 2s infinite;
+    }
+    
+    /* 控制按钮 */
+    .controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-top: 1.5rem;
+    }
+    
+    .action-buttons {
+      display: flex;
+      gap: 0.8rem;
+    }
+    
+
+    /* 按钮图标统一大小规则 */
+    .action-buttons button i {
+        font-size: 0.9em;
+        width: 1.1em;
+        text-align: center;
+    }  
+
+    .fa-warehouse {
+        transform: scale(0.7); /* 轻微缩小 */
+    }
+
+    /* 详细记录切换 */
+    .toggle-details {
+      display: inline-block;
+      padding: 0.5rem 1rem;
+      background: #f0f4f8;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.3s;
+      
+      &:hover {
+        background: #e2e8f0;
+      }
+    }
+    
+    .detail-section {
+      display: none;
+      overflow-x: auto; /* 添加水平滚动 */
+      width: 100%; /* 确保宽度占满父容器 */
+      -webkit-overflow-scrolling: touch; /* 优化移动端滚动体验 */
+      height: 500px; /* 设置固定高度 */      
+      position: relative; /* 为固定表头提供定位上下文 */
+      &.visible {
+        display: block;
+      }
+    }
+    /* 固定表头 */
+    #detailTable thead th {
+      position: sticky; /* 关键属性：固定表头 */
+      top: 0; /* 固定在顶部 */
+      z-index: 10; /* 确保表头在内容之上 */
+      background-color: #f1f5fd; /* 与原有表头背景色保持一致 */
+      border-bottom: 1px solid var(--border);
+    }   
+    #detailTable th, 
+    #detailTable td {
+      white-space: nowrap; /* 防止文本换行 */
+    }
+    #detailTable {
+      width: 100%; /* 允许表格根据内容扩展 */
+      table-layout: auto; /* 允许列宽自适应内容 */
+      overflow-y: auto;   /* 添加垂直滚动 */  
+    }    
+    /* ---汇总表格样式--- */
+    #summaryTable {
+      table-layout: auto; /* 改为自动宽度 */
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 0px; /* 上移补偿空白 */      
+    }
+
+    #summaryTable th, 
+    #summaryTable td {
+      padding: 12px;
+      white-space: nowrap; /* 防止文本换行 */
+      border-bottom: 1px solid var(--border);
+    }
+
+    #summaryTable th {
+      text-align: center; /* 表头文字居中 */
+      background-color: #f1f5fd;
+      position: sticky;
+      top: 0;
+    }
+
+    #summaryTable td:first-child, 
+    #summaryTable th:first-child {
+      text-align: left; /* 第一列品牌名称左对齐 */
+    }
+
+    #summaryTable td:not(:first-child),
+    #summaryTable th:not(:first-child) {
+      text-align: right; /* 所有数字列右对齐 */
+    }
+
+    /* 饼图主容器 */
+    .summary-content {
+      display:  flex;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.2rem;
+      margin-top: 1.2rem;
+      width: 100%;
+      flex-wrap: nowrap; /* 防止换行 */
+      position: relative; /* 添加相对定位 */
+    }
+
+    /* 表格容器 - 左侧50% */
+    .summary-table-container {
+      flex: 1; /* 改为flex分配空间 */
+      height: 100%;
+      overflow: auto;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-sizing: border-box;
+      min-height: 350px; /* 添加最小高度 */
+      min-width: 300px;/* 添加最小宽度 */
+      padding-top: 0; /* 确保容器无上内边距 */
+    }
+
+    /* 图表容器 - 右侧50% */
+    .chart-container {
+      flex: 1; /* 改为flex分配空间 */
+      background: white;
+      border-radius: 8px;
+      padding: 0.1rem;
+      border: 1px solid var(--border);
+      display: flex;
+      align-items:center; /* 垂直居中 */
+      justify-content: center; /* 居中对齐 */
+      min-height: 350px; /* 与表格容器保持一致 */
+      box-sizing: border-box;
+      min-width: 300px; /* 添加与表格相同的最小宽度 */
+      position: relative; /* 确保图表正确定位 */
+    }
+
+    /* 添加Canvas样式 */
+    #brandChart {
+      max-width: 100%;
+      max-height: 100%;
+    }
+
+    /* 确保图表容器内部图表尺寸正确 */
+    #chartContainer {
+      position: relative;
+      width: 100%;
+      height: 100%;
+    }     
+    
+    /* 销售退货对比表格样式 */
+    .returns-table-container {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-sizing: border-box;
+      min-height: 200px;
+      background: white;
+      display: none;
+      position: relative; /* 为固定表头提供定位上下文 */
+      overflow: auto; /* 允许滚动 */
+      flex: 1;
+      max-height: 350px; /* 添加最大高度 */
+    }
+
+    .returns-table-container.visible {
+      display: flex;
+      flex-direction: column; /* 确保内部内容正确排列 */
+    }
+
+    #returnsTable {
+      width: 100%;
+    }
+
+    #returnsTable thead th {
+      position: sticky !important;
+      top: 0 !important;
+      z-index: 100 !important; /* 提高层级 */
+      background-color: #f1f5fd !important;
+      color: var(--primary);
+      font-weight: 600;
+      text-align: center;
+      border-bottom: 1px solid var(--border);
+    }
+
+    #returnsTable th, 
+    #returnsTable td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+
+    #returnsTable td:first-child, 
+    #returnsTable th:first-child {
+      text-align: left;
+    }
+
+    #returnsTable td:not(:first-child),
+    #returnsTable th:not(:first-child) {
+      text-align: right;
+    }  
+
+    /*===== 详细列表【按扭】样式 ===== */
+    .card-header .toggle-icon {
+      background: none;
+      box-shadow: 0 4px 10px rgba(108, 117, 125, 0.25);
+      border: none;
+      color: var(--primary);
+      font-size: 1.2rem;
+      cursor: pointer;
+      padding: 0.5rem;
+      border-radius: 50%;
+      transition: all 0.3s;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      vertical-align: middle; /* 确保垂直居中 */
+    }
+
+    .card-header .toggle-icon:hover {
+      background-color: rgba(229, 62, 62, 0.1); /* 淡红色背景 */
+      color: #e53e3e; /* 红色图标 */
+      transform: scale(1.1);
+      font-weight: bold; /* 加粗效果 */
+    }
+
+    .card-header .toggle-icon:hover i {
+      filter: drop-shadow(0 0 1px rgba(229, 62, 62, 0.5)); /* 红色光晕效果 */
+    }
+
+    /* 当详细部分可见时，旋转图标 */
+    .detail-section.visible ~ .card-body .card-header .toggle-icon i {
+      transform: rotate(180deg);
+    }
+
+    #detailCount {  /* 详细部分计数器 */
+      font-size: 1.3rem;
+      color: #f3350f;
+      font-weight: bold;
+      vertical-align: middle;
+    }   
+
+    /* ==导出按钮样式== */
+    .card-header .toggle-icon#exportDetails {
+      color: #1eac31; /* 绿色图标 */
+    }
+
+    .card-header .toggle-icon#exportDetails:hover {
+      background: linear-gradient(135deg, #69f0c59c 0%, #1ef4b77b 100%);
+      color: #4361ee ;
+    }
+
+    .card-header .toggle-icon#exportDetails:hover i {
+      filter: drop-shadow(0 0 1px rgba(5, 150, 105, 0.5));
+    }  
+
+    /* 退货对比表样式 */
+    .summary-chart-container {
+      margin-top: 10px;
+      margin-left: 5px;
+      margin-bottom: 2px;
+      height: 240px; /* 增加图表容器高度 */
+      position: relative;
+    }
+    
+    /* 添加图表切换按钮样式 */
+    .summary-content #chartToggleBtn {
+      position: absolute;
+      top: 10px;
+      z-index: 200;
+      background: #fef7b8; /* 浅黄色 */
+      box-shadow: 0 4px 10px rgba(108, 117, 125, 0.25);
+      color: #f3350f; /* 图标颜色保持红色 */
+      border: 0.5px solid rgba(255, 153, 0, 0.4); /* 橙黄色系，更协调 */
+      padding: 0.5rem;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 1rem;
+      transition: all 0.3s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+    }
+
+    .summary-content #chartToggleBtn:hover {
+      background: linear-gradient(135deg, #ffd600 0%, #ffeb3b 100%);
+      box-shadow: 0 6px 12px rgba(73, 80, 87, 0.4);
+      transform: scale(1.1);
+      border-color: #f44336; /* 确保hover时边框也是红色 */
+    }
+
+    .summary-content #chartToggleBtn i {
+      font-size: 1.1em;
+      width: 1.1em;
+      text-align: center;
+    }   
+
+    /*===== 以下为【响应式设计】样式 =====*/
+    @media (max-width: 1200px) {
+      .filters-row {
+        grid-template-columns: 1fr 1fr; /* 2列等宽 */
+        grid-template-rows: auto auto; /* 2行 */
+      }
+
+      /* 隆桥仓库样式 */
+      .filters-row.longqiao {
+          grid-template-columns: 1fr 1fr 1fr; /* 改为2列 */
+          grid-template-rows: auto auto; /* 改为2行 */
+      }
+      
+      /* 重新排列filter-group */
+      .filters-row.longqiao .filter-group:nth-child(1) {
+          grid-row: 1;
+          grid-column: 1;
+      }
+      .filters-row.longqiao .filter-group:nth-child(2) {
+          grid-row: 1;
+          grid-column: 2;
+      }
+      .filters-row.longqiao .filter-group:nth-child(3) {
+          grid-row: 1;
+          grid-column: 3;
+      }
+      .filters-row.longqiao .filter-group:nth-child(4) {
+          grid-row: 2;
+          grid-column: 1;
+      }
+      .filters-row.longqiao .filter-group:nth-child(5) {
+          grid-row: 2;
+          grid-column: 2/4;
+      }
+
+      /* 统计卡片 */
+      .summary-stats { 
+        gap: 1rem;
+      }
+      /* 修改包含总金额的卡片内边距 */
+      .stat-card:has(#totalAmount) {
+        padding-left: 0.1rem !important;
+        padding-right: 0.1rem !important;
+      }      
+      .summary-content {
+        gap: 1rem; /* 缩小间距 */
+        overflow-x: auto; /* 允许横向滚动 */
+      }
+      
+      /* 优化表格字体大小 */
+      #summaryTable ,#returnsTable {
+        font-size: 0.9em;
+      }
+
+      /* 以下为【销售明细】样式 */
+      .detail-section {
+        overflow-x: auto; /* 添加水平滚动 */
+        width: 100%; /* 确保宽度占满父容器 */
+        -webkit-overflow-scrolling: touch; /* 优化移动端滚动体验 */
+        height: 500px; /* 设置固定高度 */
+      }
+
+      #detailTable {
+        min-width: auto; /* 移除固定最小宽度 */
+        width: max-content; /* 允许表格根据内容扩展 */
+        font-size: 0.9em; /* 减小字体大小 */
+        table-layout: auto; /* 允许列宽自适应内容 */
+        overflow-y: auto;   /* 添加垂直滚动 */  
+      }
+      
+      #detailTable th, 
+      #detailTable td {
+        white-space: nowrap; /* 防止文本换行 */
+        min-width: 60px; /* 设置最小列宽 */
+        padding: 0.6rem; /* 减小内边距 */
+      }    
+      /* 固定表头 */
+      #detailTable thead th {
+        position: sticky; /* 关键属性：固定表头 */
+        top: 0; /* 固定在顶部 */
+        z-index: 10; /* 确保表头在内容之上 */
+        background-color: #f1f5fd; /* 与原有表头背景色保持一致 */
+      } 
+
+      /* ==以下为小屏【下拦框】样式 ==*/
+      /* 下拉菜单容器 */
+      .options-container {
+        overflow-x: auto;  /* 允许水平滚动 */
+        -webkit-overflow-scrolling: touch; /* 优化移动端滚动体验 */          
+        width: 100%;
+      }
+
+      .option {
+        padding: 8px 16px;
+        align-items: center;  /*垂直居中 */
+        justify-content: flex-start;  /* 整体靠左对齐 */
+        width: max-content; /* 允许表格根据内容扩展 */
+        white-space: nowrap; /* 禁止文字换行 */
+        table-layout: auto; /* 允许列宽自适应内容 */
+        label {
+          white-space: nowrap; /* 禁止文字换行 */
+        }
+      }  
+      
+      .user-status {
+        right: 10px !important; /* 距离右侧10px */
+      }      
+    
+      input, select { 
+        font-size: 1rem !important; 
+      }
+    }
+    
+    @media (max-width: 768px) {
+      .summary-content {
+        flex-direction: column;
+      }
+      
+      .summary-table-container,
+      .chart-container {
+        width: 100% !important;
+        min-width: auto;
+        flex: 1 1 auto;
+      }
+      .summary-chart-container {
+        margin-top: 10px;
+        margin-left: 5px;
+        height: 200px; /* 增加图表容器高度 */
+        position: relative;
+      }
+      /* 优化表格字体大小 */
+      #summaryTable,#returnsTable {
+        font-size: 0.9em;
+        line-height: 1.4;
+      }      
+      #summaryTable th, #summaryTable td,
+      #returnsTable th, #returnsTable td{
+        padding: 0.6rem;
+      }
+      .summary-table-container{
+        min-height: 200px;
+      }
+
+      /* 隆桥仓库样式 */
+      .filters-row.longqiao {
+          grid-template-columns: 1fr 1fr; /* 改为2列 */
+          grid-template-rows: auto auto auto; /* 改为3行 */
+      }
+      
+      /* 重新排列filter-group */
+      .filters-row.longqiao .filter-group:nth-child(1) {
+          grid-row: 1;
+          grid-column: 1;
+      }
+      .filters-row.longqiao .filter-group:nth-child(2) {
+          grid-row: 1;
+          grid-column: 2;
+      }
+      .filters-row.longqiao .filter-group:nth-child(3) {
+          grid-row: 2;
+          grid-column: 1;
+      }
+      .filters-row.longqiao .filter-group:nth-child(4) {
+          grid-row: 2;
+          grid-column: 2;
+      }
+      .filters-row.longqiao .filter-group:nth-child(5) {
+          grid-row: 3;
+          grid-column: 1/3;
+      }
+
+      header ,mheader { 
+        padding: 1.5rem; 
+      }
+      
+      h1 { 
+        font-size: 2rem; 
+      }
+      .card-header h2 {
+        font-size: 1.2rem;
+      }    
+      .card-header { 
+        padding: 0.5rem 1.4rem;    
+      }     
+
+      .stat-card {
+        padding: 1rem;
+      }
+      
+      .action-buttons {
+        width: 100%;
+        justify-content: center;
+      }
+
+      button { 
+        padding: 0.8rem 1rem; 
+        font-size: 1.1rem; 
+        gap:6px;
+      }    
+      /* 统计卡片 */
+      .summary-stats { 
+        grid-template-columns: repeat(2, 1fr); /* 永远 2 列，每列等宽 */
+        gap: 0.8rem;
+      }
+
+      .select-box {
+      .tag {
+        /* 关键调整 */
+        font-size: clamp(0.65rem, 1vw, 0.85rem); /* 动态字体大小 */
+        min-width: 0 !important;
+        flex: 0 1 auto;
+        overflow: hidden; /* 隐藏溢出内容 */
+        text-overflow: ellipsis; /* 超出显示省略号 */
+        white-space: nowrap;
+
+        /* 增加内边距兼容性 */
+        padding: 4px 6px; /* 上下4px，左右6px更协调 */
+        }
+        .clear-btn {
+          right: 5px;
+        }
+        
+        .selected-display {
+          max-height: 80px; /* 移动端允许更多空间 */
+        }
+      }
+    
+      /* 以下为【销售明细】样式 */
+      .detail-section {
+        overflow-x: auto; /* 添加水平滚动 */
+        width: 100%; /* 确保宽度占满父容器 */
+        -webkit-overflow-scrolling: touch; /* 优化移动端滚动体验 */
+      }
+
+      #detailTable {
+        min-width: auto; /* 移除固定最小宽度 */
+        width: max-content; /* 允许表格根据内容扩展 */
+        font-size: 0.85em; /* 减小字体大小 */
+        table-layout: auto; /* 允许列宽自适应内容 */
+        line-height: 1.2;
+      }
+      
+      #detailTable th, 
+      #detailTable td {
+        white-space: nowrap; /* 防止文本换行 */
+        min-width: 60px; /* 设置最小列宽 */
+        padding: 0.5rem; /* 减小内边距 */
+      }
+
+      /* 加载动画优化 */
+      .loading {
+        width: 80%;
+        max-width: 280px;
+        padding: 1.5rem;
+        border-radius: 18px;
+      }
+      
+      .spinner {
+        width: 50px;
+        height: 50px;
+        margin-bottom: 1.2rem;
+      }
+      
+      .spinner::before,
+      .spinner::after {
+        border-width: 3px;
+      }
+      
+      .loading p {
+        font-size: 1rem;
+      } 
+      
+      .card-header .toggle-icon {
+        font-size: 1rem;
+        width: 32px;
+        height: 32px;
+      }   
+      label { 
+        font-size: 1.1rem;         
+      }      
+      .stat-label {
+        font-size: 1.1rem;
+      }        
+      
+      /* 添加用户状态标签在移动端的适配样式 */
+      .user-status {
+        margin-left: 0;
+        margin-top: 10px;
+        right: 1px !important; /* 距离右侧8px */
+      }
+
+      .user-info {
+        padding: 6px 10px !important; 
+      }
+
+      .user-info i.fa-user-circle {
+        font-size: 20px;
+        margin-right: 6px;
+      }
+
+      .user-info span {
+        font-size: 0.9rem;
+      }
+
+      .user-info i.fa-chevron-down {
+        margin-left: 6px;
+        font-size: 10px;
+      } 
+    }  
+    
+    @media (max-width: 450px) {
+      /* 优化表格字体大小 */
+      #summaryTable, #returnsTable {
+        line-height: 1.2;
+        font-size: 0.85em;
+      }    
+      #summaryTable th, #summaryTable td,
+      #returnsTable th, #returnsTable td{
+        padding: 0.5rem;
+      }       
+
+      #detailCount {  /* 详细部分计数器 */
+        font-size: 1.1rem !important;
+        color: #f3350f;
+        font-weight: bold;
+        vertical-align: middle;
+      }   
+
+      .card-header .toggle-icon {
+        font-size: 0.9rem;
+        width: 28px;
+        height: 28px;
+      }     
+
+      .card-header h2 {
+        font-size: 1.1rem;
+      }   
+      .option {
+        label {
+          font-size: 0.9rem;
+          font-weight: 300;
+        }
+      }  
+      
+      .placeholder { 
+        font-size: 0.9rem;
+      }
+      label { 
+        margin-bottom: 0.3rem; 
+        font-size: 1rem;         
+      }
+      .stat-label {
+        font-size: 1rem;
+      }     
+
+      input, select { 
+        padding: 0.62rem; 
+        font-size: 0.9rem !important; 
+      }
+
+      /* 统计卡片 */
+      .summary-stats { 
+        gap: 0.5rem;
+      }      
+
+      button { 
+        padding: 0.5rem 0.8rem; 
+        font-size: 1rem; 
+        gap:5px;
+      }  
+      .stat-value {
+      margin-top: 0.3rem;    
+      }   
+      .card-body { 
+        padding: 0.625rem; 
+      }  
+      
+      .filters-row {
+        /* 改为单列布局 */
+        grid-template-columns: 1fr; 
+        grid-template-columns: unset;
+        grid-template-rows: unset;
+        gap: 1px;
+        margin-bottom: 1.2rem; 
+      }
+      .controls {   
+        margin-top: 1.2rem; 
+      }     
+
+      /* 隆桥仓库样式 */
+      .filters-row.longqiao {
+        grid-template-columns: 1fr; /* 改为1列 */
+        grid-template-columns: unset;
+        grid-template-rows: unset;        
+      }
+
+      .filter-group {
+        /* 强制每个控件独占一行 */
+        width: 100%;
+        margin-right: 0;
+        margin-bottom: 8px; /* 保持与图片相同的垂直间距 */
+      }
+
+      /* 清除所有grid定位 */
+      .filters-row.longqiao .filter-group:nth-child(n), 
+      .filter-group:nth-child(n) {
+        grid-column: auto;
+        grid-row: auto;
+      }      
+
+      /* 在超小屏幕上进一步调整用户状态标签 */
+      .user-status {
+        position: fixed;
+        bottom: 12px;
+        right: -10px !important;
+      }
+
+      .user-info {
+        padding: 5px 8px !important;
+      }
+
+      .user-info i.fa-user-circle {
+        font-size: 18px;
+        margin-right: 5px;
+      }
+
+      .user-info span {
+        font-size: 0.8rem;
+      }
+      
+      .user-info i.fa-chevron-down {
+        margin-left: 4px;
+        font-size: 8px;
+      }
+      
+      /* 在超小屏幕上可能需要调整标题布局 */
+      h1 {
+        font-size: 1.5rem;
+      }
+      
+      header, mheader {
+        padding: 1rem;
+      }   
+      
+      .flatpickr-current-month .numInputWrapper {
+        width: 6ch !important;
+      }      
+    }
+
+    /*===== 以下为【认证表单】样式====== */
+    .auth-form {
+      display: none;
+    }
+
+    .auth-form.active {
+      display: block;
+    }
+
+    .auth-tab {
+      transition: all 0.3s ease;
+    }
+
+    .auth-tab.active {
+      background: #4361ee !important;
+      color: white !important;
+      font-weight: bold;
+    } 
+
+    /* 新增：登录/注册按钮居中+红色样式 */
+    #loginBtn, #registerBtn {
+      background: linear-gradient(135deg, #e53e3e 0%, #c53030 100%) !important;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      box-shadow: 0 4px 10px rgba(229, 62, 62, 0.25);
+    }
+
+    #loginBtn:hover, #registerBtn:hover {
+      background: linear-gradient(135deg, #c53030 0%, #a32929 100%) !important;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 12px rgba(197, 48, 48, 0.4);
+    }
+
+    /* 圆角提示容器样式 */
+    .rounded-alert {
+      position: fixed;
+      top: 20px;
+      padding: 15px 25px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      transform: translateX(0); /* 移除水平偏移 */
+      transition: transform 0.3s ease, opacity 0.3s ease;
+    }
+
+    .rounded-alert.error {
+      background: #ffebee;
+      color: #c62828;
+      border-left: 4px solid #c62828;
+    }
+
+    .rounded-alert.success {
+      background: #e8f5e9;
+      color: #2e7d32;
+      border-left: 4px solid #2e7d32;
+    }
+
+    .rounded-alert.warning {
+      background: #fff8e1;
+      color: #f57f17;
+      border-left: 4px solid #f57f17;
+    }
+
+    .alert-content {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 15px;
+      font-weight: 500;
+    }
+
+    .rounded-alert i {
+      font-size: 20px;
+    }
+
+    .fade-out {
+      transform: translateX(100%);
+      opacity: 0;
+    }    
+
+    /* 以下为【用户信息】样式 */
+    .user-status {
+      position: fixed; /* 改为固定定位 */
+      bottom: 20px; /* 距离底部20px */
+      right: 20px; /* 距离右侧20px */
+      z-index: 10000; /* 确保在最上层 */
+    }
+
+    .user-dropdown {
+      position: relative;
+    }
+
+    .user-info {
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+      background: rgba(67, 97, 238, 0.9); /* 使用主题色背景 */
+      padding: 8px 12px;
+      border-radius: 20px;
+      transition: background 0.3s;
+      white-space: nowrap;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2); /* 添加阴影效果 */
+    }
+
+    .user-info:hover {
+      background: rgba(67, 97, 238, 1); /* 悬停时加深背景 */
+    }
+
+    .user-info i.fa-user-circle {
+      font-size: 24px;
+      margin-right: 8px;
+      color: white;
+    }
+
+    .user-info span {
+      color: white;
+      font-weight: 500;
+      max-width: 120px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .user-info i.fa-chevron-down {
+      margin-left: 8px;
+      font-size: 15px;
+      color: white;
+    }
+
+  .user-menu {
+    position: absolute;
+    top: calc(100% + 5px);
+    right: 15px;
+  }
+
+    .user-menu #logoutBtn {
+      padding: 10px 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      color: #e53e3e;
+      font-weight: 500;
+      transition: background 0.2s;
+    }
+
+    .user-menu #logoutBtn:hover {
+      background: #fff5f5;
+    }
+
+    .user-menu #logoutBtn i {
+      margin-right: 8px;
+    }
+
+  /* 日期范围选择器样式 */
+  .flatpickr-calendar {
+    border-radius: 8px;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+  }
+
+  .flatpickr-day.selected, 
+  .flatpickr-day.selected:hover {
+    background: var(--primary);
+    border-color: var(--primary);
+  }
+
+  .flatpickr-day.inRange {
+    background: rgba(67, 97, 238, 0.1);
+    box-shadow: none;
+  }
+
+  .flatpickr-input {
+    padding: 0.6rem 1rem 0.6rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 1.1rem;
+    background: white;
+    transition: border-color 0.3s, box-shadow 0.3s;
+    width: 100%;
+    cursor: pointer;
+  }
+
+  .flatpickr-input:focus {
+    border-color: var(--primary);
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.2);
+  }  
+
+  </style>
+    
+  <!-- 非关键CSS异步加载 -->
+  <link rel="preload" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.4.0/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <link rel="preload" href="flatpickr.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript>
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="flatpickr.css">
+  </noscript>
+  
+  <!-- 预加载关键JS资源 -->
+  <link rel="preload" href="https://unpkg.com/@supabase/supabase-js@2.57.2/dist/umd/supabase.js" as="script">
+  <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js" as="script">
+  <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.0.0/chartjs-plugin-datalabels.min.js" as="script">
+  <link rel="icon" href="app32x32.png" type="image/x-icon">  
+</head>
+<body>
+  <div class="container">
+    <!-- 添加登录容器 -->
+    <div id="authContainer" style="display: none;">
+      <div class="card" style="max-width: 500px; margin: 2rem auto;">
+        <div class="card-header">
+          <h2><img src="app48x48.png" alt="应用图标" style="border-radius: 8px; filter: drop-shadow(0px 1px 2px rgba(0, 0, 0, 0.5));"> 用户登录</h2>
+        </div>
+        <div class="card-body">
+          <div id="authTabs" style="display: flex; margin-bottom: 1.5rem;">
+            <div class="auth-tab active" data-tab="login" style="flex: 1; text-align: center; padding: 0.5rem; background: #f0f4f8;  cursor: pointer; border-radius: 4px; margin-right: 0.5rem;">
+              登录
+            </div>
+            <div class="auth-tab" data-tab="register" style="flex: 1; text-align: center; padding: 0.5rem; background: #f0f4f8; cursor: pointer; border-radius: 4px;">
+              注册
+            </div>
+          </div>
+          
+          <div id="loginForm" class="auth-form active">
+            <div class="filter-group" style="margin-bottom: 1rem;">
+              <label for="loginEmail"><i class="fas fa-envelope"></i> 邮箱</label>
+              <input type="email" id="loginEmail" placeholder="请输入邮箱">
+            </div>
+            <div class="filter-group" style="margin-bottom: 1.5rem;">
+              <label for="loginPassword"><i class="fas fa-lock"></i> 密码</label>
+              <input type="password" id="loginPassword" placeholder="请输入密码">
+            </div>
+            <button id="loginBtn" class="btn-query" style="width: 100%;">
+              <i class="fas fa-sign-in-alt"></i> 登录
+            </button>
+            <div style="text-align: center; margin-top: 1rem;">
+              <a href="#" id="forgotPasswordLink" style="color: #4361ee;">忘记密码?</a>
+            </div>
+          </div>
+          
+          <div id="registerForm" class="auth-form" style="display: none;">
+            <div class="filter-group" style="margin-bottom: 1rem;">
+              <label for="registerEmail"><i class="fas fa-envelope"></i> 邮箱</label>
+              <input type="email" id="registerEmail" placeholder="请输入邮箱">
+            </div>
+            <div class="filter-group" style="margin-bottom: 1rem;">
+              <label for="registerPassword"><i class="fas fa-lock"></i> 密码</label>
+              <input type="password" id="registerPassword" placeholder="请输入密码">
+            </div>
+            <div class="filter-group" style="margin-bottom: 1.5rem;">
+              <label for="registerPhone"><i class="fas fa-phone"></i> 电话 (可选)</label>
+              <input type="tel" id="registerPhone" placeholder="请输入电话">
+            </div>
+            <button id="registerBtn" class="btn-query" style="width: 100%;">
+              <i class="fas fa-user-plus"></i> 注册
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 主应用容器 -->
+    <div id="appContainer" style="display: none;">        
+      <!-- 添加用户状态标签 -->
+      <header style="display: flex; align-items: left; position: relative; min-height: 130px; padding: 10px 20px 15px 20px;">
+        <h1><img src="icon64.png" alt="应用图标" style="border-radius: 8px; filter: drop-shadow(0px 2px 4px rgba(0, 0, 0, 0.5));">多多买菜销售数据查询系统</h1>
+        <div class="user-status" id="userStatus" style="position: relative; bottom: auto; margin-left: auto;">
+          <div class="user-dropdown" style="position: absolute; right: 0; bottom: -10px;">
+            <div class="user-info" id="userInfo" style="display: flex; align-items: center; cursor: pointer; background: rgba(255, 255, 255, 0.2);">
+              <i class="fas fa-user-circle" style="font-size: 24px; margin-right: 8px; color: white;"></i>
+              <span id="userName" style="color: white; font-weight: 500;"></span>
+              <i class="fas fa-chevron-down" style="margin-left: 8px; font-size: 13px; color: white;"></i>
+            </div>
+            <div class="user-menu" id="userMenu" style="position: absolute; top: 100%; right: 0; background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); padding: 8px 0; min-width: 120px; display: none; z-index: 1000;">
+              <div id="logoutBtn" style="padding: 10px 16px; cursor: pointer; display: flex; align-items: center; color: #e53e3e; font-weight: 500;">
+                <i class="fas fa-sign-out-alt" style="margin-right: 8px;"></i>
+                退出登录
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+      
+      <div class="card">
+        <div class="card-header">
+          <h2><i class="fas fa-filter"></i> 数据筛选</h2>
+        </div>
+        <div class="card-body">
+          <div class="filters-row">
+            <div class="filter-group">
+              <label><i class="far fa-calendar-alt"></i> 日期范围</label>
+              <input type="text" id="dateRangePicker" placeholder="选择日期范围" readonly>
+            </div>
+            
+            <div class="filter-group">
+              <label><i class="fas fa-warehouse"></i> 仓库</label>
+              <div class="custom-multiselect" id="warehouseMultiselect">
+                <div class="select-box" id="warehouseSelector">
+                  <div class="placeholder">选择仓库</div>
+                  <div class="selected-display"></div> <!-- 新增：用于显示选中项 -->
+                  <i class="fas fa-chevron-down arrow"></i>
+                  <i class="fas fa-times-circle clear-btn"></i> <!-- 新增：清除按钮 -->
+                </div>
+                <div class="options-container" id="warehouseOptions">
+                  <div class="option" id="warehouseSelectAll">
+                    <input type="checkbox" id="selectAllWarehouses">
+                    <label for="selectAllWarehouses">全选</label>
+                  </div>
+                  <!-- 仓库选项将通过JS动态添加 -->
+                </div>
+              </div>
+            </div>
+            
+            <div class="filter-group">
+              <label><i class="fas fa-tags"></i> 品牌</label>
+              <div class="custom-multiselect" id="brandMultiselect">
+                <div class="select-box" id="brandSelector">
+                  <div class="placeholder">选择品牌</div>
+                  <div class="selected-display"></div> <!-- 新增：用于显示选中项 -->
+                  <i class="fas fa-chevron-down arrow"></i>
+                  <i class="fas fa-times-circle clear-btn"></i> <!-- 新增：清除按钮 -->
+                </div>
+                <div class="options-container" id="brandOptions">
+                  <div class="option" id="brandSelectAll">
+                    <input type="checkbox" id="selectAllBrands">
+                    <label for="selectAllBrands">全选</label>
+                  </div>
+                  <!-- 品牌选项将通过JS动态添加 -->
+                </div>
+              </div>
+            </div>
+
+            <div class="filter-group" id="customerFilterGroup" style="display: none;">
+              <label><i class="fas fa-user-friends"></i> 客户</label>
+              <div class="custom-multiselect" id="customerMultiselect">
+                <div class="select-box" id="customerSelector">
+                  <div class="placeholder">全部客户</div>
+                  <div class="selected-display"></div> <!-- 新增：用于显示选中项 -->
+                  <i class="fas fa-chevron-down arrow"></i>
+                  <i class="fas fa-times-circle clear-btn"></i> <!-- 新增：清除按钮 -->
+                </div>
+                <div class="options-container" id="customerOptions">
+                  <div class="option" id="customerSelectAll">
+                    <input type="checkbox" id="selectAllCustomer">
+                    <label for="selectAllCustomer">全选</label>
+                  </div>
+                  <!-- 品牌选项将通过JS动态添加 -->
+                </div>
+              </div>
+            </div>       
+
+            <div class="filter-group">
+              <label><i class="fas fa-box"></i> 商品</label>
+              <div class="custom-multiselect" id="productMultiselect">
+                <div class="select-box" id="productSelector">
+                  <div class="placeholder">选择商品</div>
+                  <div class="selected-display"></div> <!-- 新增：用于显示选中项 -->
+                  <i class="fas fa-chevron-down arrow"></i>
+                  <i class="fas fa-times-circle clear-btn"></i> <!-- 新增：清除按钮 -->
+                </div>
+                <div class="options-container" id="productOptions">
+                  <div class="option" id="productSelectAll">
+                    <input type="checkbox" id="selectAllProducts">
+                    <label for="selectAllProducts">全选</label>
+                  </div>
+                  <!-- 商品选项将通过JS动态添加 -->
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="controls">
+            <div class="action-buttons">
+              <button id="clearBtn" class="btn-secondary">
+                <i class="fas fa-eraser"></i> 清除筛选
+              </button>
+              <button id="queryBtn" class="btn-query">
+                <i class="fas fa-search"></i> 查询数据
+              </button>
+              <button id="switchWarehouseBtn" class="btn-secondary">
+                <i class="fas fa-warehouse"></i> 切换仓库
+              </button>              
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="card summary-card">
+        <div class="card-header">
+          <h2><i class="fas fa-chart-pie"></i> 销售汇总</h2>
+        </div>
+        <div class="card-body">
+          <div class="summary-stats">
+            <div class="stat-card">
+              <div class="stat-label">总件数</div>
+              <div id="totalQuantity" class="stat-value">0</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">总金额</div>
+              <div id="totalAmount" class="stat-value">¥0.00</div>
+            </div>
+            <div class="stat-card" id="profitCard" style="display: none;">
+              <div class="stat-label">总毛利</div>
+              <div id="totalProfit" class="stat-value">¥0.00</div>
+            </div>            
+            <div class="stat-card">
+              <div class="stat-label">品牌数量</div>
+              <div id="totalBrands" class="stat-value">0</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">商品种类</div>
+              <div id="totalProducts" class="stat-value">0</div>
+            </div>
+          </div>
+          
+          <!-- 新增: 汇总表格和饼图容器 -->
+          <div class="summary-content">
+            <button class="toggle-icon" id="chartToggleBtn" title="销售退货对比" style="display: none;">
+              <i class="fas fa-exchange-alt"></i>
+            </button>             
+            <div class="summary-table-container">
+              <table id="summaryTable">
+                <thead>
+                  <tr>
+                    <th>品牌</th>
+                    <th>销售数量</th>
+                    <th>销售金额</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            
+            <div class="chart-container" id="chartContainer">               
+              <!-- 饼图将在这里渲染 -->
+            </div>
+            
+            <!-- 将退货表格容器移到这里，与上面两个容器并列 -->
+            <div class="returns-table-container" id="returnsTableContainer" style="display: none;">
+              <table id="returnsTable">
+                <thead>
+                  <tr>
+                    <th>产品名称</th>
+                    <th>入库数量</th>
+                    <th>销售数量</th>
+                    <th>退货数量</th>
+                    <th>差异数量</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div> 
+        </div>  
+      </div>
+      
+      <div class="card">
+        <div class="card-header">
+          <h2>
+            <i class="fas fa-list"></i> 详细销售记录
+            <span id="detailCount"></span>
+            <button class="toggle-icon" id="toggleDetails" title="显示/隐藏详情">
+              <i class="fas fa-chevron-down"></i>
+            </button>
+            <button class="toggle-icon" id="exportDetails" title="导出为Excel">
+              <i class="fas fa-file-export"></i>
+            </button>   
+             
+          </h2>
+        </div>
+        <div class="card-body" id="detailcardBody">
+          <div class="detail-section" id="detailSection">
+            <table id="detailTable">
+              <thead>
+                <tr>
+                  <th>日期</th>
+                  <th>商品ID</th>
+                  <th>商品名称</th>
+                  <th>品牌</th>
+                  <th>仓库</th>
+                  <th>销量</th>
+                  <th>单价</th>
+                  <th>金额</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      
+      <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <p>正在加载数据，请稍候...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- JS资源使用defer异步加载 -->
+  <script src="https://unpkg.com/@supabase/supabase-js@2.57.2/dist/umd/supabase.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.0.0/chartjs-plugin-datalabels.min.js" defer></script>
+  <script src="flatpickr.js" defer></script>
+  <script src="main.js" defer></script>
+
+</body>
+</html>
