@@ -18,6 +18,26 @@ export async function onRequest(context) {
   }
 
   try {
+    // 检查环境变量是否存在
+    const supabaseUrl = env.SUPABASE_URL;
+    const supabaseKey = env.SUPABASE_KEY;
+    
+    if (!supabaseUrl || !supabaseKey) {
+      return new Response(JSON.stringify({ 
+        error: 'Server configuration error',
+        message: 'Missing required environment variables'
+      }), {
+        status: 500,
+        headers: { 
+          'Content-Type': 'application/json',
+          ...corsHeaders 
+        }
+      });
+    }
+
+    // 构建 Supabase Auth API URL
+    const authApiUrl = `${supabaseUrl}/auth/v1`;
+
     // 获取请求体
     let body = null;
     if (['POST', 'PATCH'].includes(method)) {
@@ -27,11 +47,6 @@ export async function onRequest(context) {
         // 忽略无法解析的JSON
       }
     }
-
-    // 构建 Supabase Auth API URL
-    const supabaseUrl = env.SUPABASE_URL;
-    const supabaseKey = env.SUPABASE_KEY;
-    const authApiUrl = `${supabaseUrl}/auth/v1`;
 
     // 登录处理
     if (path === 'login' && method === 'POST') {
@@ -45,10 +60,12 @@ export async function onRequest(context) {
         body: JSON.stringify(body)
       });
 
-      const data = await authResponse.json();
-      
       if (!authResponse.ok) {
-        return new Response(JSON.stringify({ error: data.message || 'Authentication failed' }), {
+        const errorData = await authResponse.json();
+        return new Response(JSON.stringify({ 
+          error: 'Authentication failed', 
+          message: errorData.error_description || 'Invalid credentials'
+        }), {
           status: authResponse.status,
           headers: { 
             'Content-Type': 'application/json',
@@ -56,38 +73,8 @@ export async function onRequest(context) {
           }
         });
       }
-      
-      return new Response(JSON.stringify(data), {
-        headers: { 
-          'Content-Type': 'application/json',
-          ...corsHeaders 
-        }
-      });
-    }
-
-    // 注册处理
-    if (path === 'signup' && method === 'POST') {
-      const authResponse = await fetch(`${authApiUrl}/signup`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': supabaseKey,
-          'Authorization': `Bearer ${supabaseKey}`
-        },
-        body: JSON.stringify(body)
-      });
 
       const data = await authResponse.json();
-      
-      if (!authResponse.ok) {
-        return new Response(JSON.stringify({ error: data.message || 'Signup failed' }), {
-          status: authResponse.status,
-          headers: { 
-            'Content-Type': 'application/json',
-            ...corsHeaders 
-          }
-        });
-      }
       
       return new Response(JSON.stringify(data), {
         headers: { 
@@ -119,10 +106,12 @@ export async function onRequest(context) {
         }
       });
 
-      const data = await userResponse.json();
-      
       if (!userResponse.ok) {
-        return new Response(JSON.stringify({ error: data.message || 'Failed to get user' }), {
+        const errorData = await userResponse.json();
+        return new Response(JSON.stringify({ 
+          error: 'Failed to get user',
+          message: errorData.message || 'Invalid token'
+        }), {
           status: userResponse.status,
           headers: { 
             'Content-Type': 'application/json',
@@ -130,83 +119,13 @@ export async function onRequest(context) {
           }
         });
       }
+
+      const data = await userResponse.json();
       
       return new Response(JSON.stringify(data), {
         headers: { 
           'Content-Type': 'application/json',
-            ...corsHeaders 
-        }
-      });
-    }
-
-    // 退出登录
-    if (path === 'logout' && method === 'POST') {
-      const authHeader = request.headers.get('Authorization');
-      
-      if (!authHeader) {
-        return new Response(JSON.stringify({ error: 'Missing authorization header' }), {
-          status: 401,
-          headers: { 
-            'Content-Type': 'application/json',
-            ...corsHeaders 
-          }
-        });
-      }
-      
-      const logoutResponse = await fetch(`${authApiUrl}/logout`, {
-        method: 'POST',
-        headers: {
-          'apikey': supabaseKey,
-          'Authorization': authHeader,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (!logoutResponse.ok) {
-        const data = await logoutResponse.json();
-        return new Response(JSON.stringify({ error: data.message || 'Failed to logout' }), {
-          status: logoutResponse.status,
-          headers: { 
-            'Content-Type': 'application/json',
-            ...corsHeaders 
-          }
-        });
-      }
-      
-      return new Response(JSON.stringify({ message: 'Successfully signed out' }), {
-        headers: { 
-          'Content-Type': 'application/json',
-            ...corsHeaders 
-        }
-      });
-    }
-
-    // 重置密码
-    if (path === 'reset-password' && method === 'POST') {
-      const resetResponse = await fetch(`${authApiUrl}/recover`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': supabaseKey
-        },
-        body: JSON.stringify({ email: body.email })
-      });
-
-      if (!resetResponse.ok) {
-        const data = await resetResponse.json();
-        return new Response(JSON.stringify({ error: data.message || 'Failed to reset password' }), {
-          status: resetResponse.status,
-          headers: { 
-            'Content-Type': 'application/json',
-            ...corsHeaders 
-          }
-        });
-      }
-      
-      return new Response(JSON.stringify({ message: 'Password reset email sent' }), {
-        headers: { 
-          'Content-Type': 'application/json',
-            ...corsHeaders 
+          ...corsHeaders 
         }
       });
     }
@@ -225,7 +144,7 @@ export async function onRequest(context) {
     
     return new Response(JSON.stringify({ 
       error: 'Internal server error',
-      message: error.message 
+      message: error.message
     }), {
       status: 500,
       headers: { 
