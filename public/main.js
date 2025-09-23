@@ -1,6 +1,6 @@
 // ============== 1. 初始化部分 ==============
 // Supabase客户端初始化
-const WORKER_URL = '/api'; // 或者直接使用空字符串 ''
+const WORKER_URL = ''; // 使用空字符串，指向同一个域名
 let supabaseClient;
 
 // 创建自定义的 Supabase 客户端
@@ -124,8 +124,9 @@ async function sendRequest(method, path, data = null) {
     apiPath = `auth/v1/${path.replace('auth/', '')}`;
   }
   
-  // 使用相对路径
+  // 构建完整的 URL
   let url = `${WORKER_URL}/${apiPath}`;
+  
   const options = {
     method: method,
     headers: {
@@ -153,33 +154,37 @@ async function sendRequest(method, path, data = null) {
       if (typeof value === 'object' && value !== null) {
         // 处理范围查询（如日期范围）
         if (value.gte && value.lte) {
-          // 修正：使用正确的 Supabase 范围查询格式
           queryParams.push(`${key}=gte.${value.gte}`);
           queryParams.push(`${key}=lte.${value.lte}`);
         } else if (key === 'select') {
-          // 处理select参数
           queryParams.push(`select=${value}`);
         } else if (key === 'offset' || key === 'limit') {
-          // 直接添加 offset 和 limit 参数
           queryParams.push(`${key}=${value}`);
         }
       } else {
-        // 修正等值查询参数格式
         queryParams.push(`${key}=${value}`);
       }
     }
-    url = `${url}?${queryParams.join('&')}`;
-
+    if (queryParams.length > 0) {
+      url = `${url}?${queryParams.join('&')}`;
+    }
   } else if (data && method !== 'GET') {
-    // 对于非GET请求，将数据放在请求体中
     options.body = JSON.stringify(data);
   }
   
   try {
+    console.log('Making request to:', url, options);
+    
     const response = await fetch(url, options);
+    
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      let errorData;
+      try {
+        errorData = await response.json();
+      } catch {
+        errorData = { error: `HTTP error! status: ${response.status}` };
+      }
+      throw new Error(errorData.error || errorData.message || `HTTP error! status: ${response.status}`);
     }
     
     const responseData = await response.json();
@@ -2917,3 +2922,4 @@ function initToggleButtonPositioning() {
   updateButtonPosition();// 初始位置
 
 }
+
