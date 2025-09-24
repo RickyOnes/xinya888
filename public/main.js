@@ -1,6 +1,6 @@
 // ============== 1. 初始化部分 ==============
 // Supabase客户端初始化
-const WORKER_URL = ''; // 使用空字符串，指向同一个域名
+const WORKER_URL = '/api'; // 现在使用 /api 前缀
 let supabaseClient;
 
 // 创建自定义的 Supabase 客户端
@@ -121,11 +121,14 @@ async function sendRequest(method, path, data = null) {
   // 处理认证端点的特殊路径
   let apiPath = path;
   if (path.startsWith('auth/')) {
-    apiPath = `auth/v1/${path.replace('auth/', '')}`;
+    // 认证请求直接使用 /auth/v1/ 路径
+    apiPath = path.replace('auth/', 'auth/v1/');
+  } else {
+    // 数据请求使用 /api/ 前缀
+    apiPath = `api/${path}`;
   }
   
-  // 构建完整的 URL
-  let url = `${WORKER_URL}/${apiPath}`;
+  let url = `${WORKER_URL ? WORKER_URL : ''}/${apiPath}`;
   
   const options = {
     method: method,
@@ -2922,4 +2925,5 @@ function initToggleButtonPositioning() {
   updateButtonPosition();// 初始位置
 
 }
+
 
