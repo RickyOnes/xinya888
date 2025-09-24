@@ -1,7 +1,14 @@
 // functions/auth/v1/[[path]].js
 export async function onRequest(context) {
   const { request, env, params } = context;
-  const path = params.path || '';
+  
+  // 处理 path 参数（可能是数组）
+  let path = params.path;
+  if (Array.isArray(path)) {
+    path = path.join('/');
+  }
+  path = path || '';
+
   const url = new URL(request.url);
   const method = request.method;
 
@@ -44,12 +51,31 @@ export async function onRequest(context) {
       try {
         body = await request.json();
       } catch (e) {
-        // 忽略无法解析的JSON
+        return new Response(JSON.stringify({ error: 'Invalid JSON in request body' }), {
+          status: 400,
+          headers: { 
+            'Content-Type': 'application/json',
+            ...corsHeaders 
+          }
+        });
       }
     }
 
     // 登录处理
     if (path === 'login' && method === 'POST') {
+      if (!body || !body.email || !body.password) {
+        return new Response(JSON.stringify({ 
+          error: 'Missing credentials',
+          message: 'Email and password are required' 
+        }), {
+          status: 400,
+          headers: { 
+            'Content-Type': 'application/json',
+            ...corsHeaders 
+          }
+        });
+      }
+
       const authResponse = await fetch(`${authApiUrl}/token?grant_type=password`, {
         method: 'POST',
         headers: {
@@ -57,7 +83,10 @@ export async function onRequest(context) {
           'apikey': supabaseKey,
           'Authorization': `Bearer ${supabaseKey}`
         },
-        body: JSON.stringify(body)
+        body: JSON.stringify({
+          email: body.email,
+          password: body.password
+        })
       });
 
       if (!authResponse.ok) {
@@ -130,8 +159,53 @@ export async function onRequest(context) {
       });
     }
 
+    // 退出登录
+    if (path === 'logout' && method === 'POST') {
+      const authHeader = request.headers.get('Authorization');
+      
+      if (!authHeader) {
+        return new Response(JSON.stringify({ error: 'Missing authorization header' }), {
+          status: 401,
+          headers: { 
+            'Content-Type': 'application/json',
+            ...corsHeaders 
+          }
+        });
+      }
+      
+      const logoutResponse = await fetch(`${authApiUrl}/logout`, {
+        method: 'POST',
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': authHeader,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!logoutResponse.ok) {
+        const errorData = await logoutResponse.json();
+        return new Response(JSON.stringify({ error: data.message || 'Failed to logout' }), {
+          status: logoutResponse.status,
+          headers: { 
+            'Content-Type': 'application/json',
+            ...corsHeaders 
+          }
+        });
+      }
+      
+      return new Response(JSON.stringify({ message: 'Successfully signed out' }), {
+        headers: { 
+          'Content-Type': 'application/json',
+          ...corsHeaders 
+        }
+      });
+    }
+
     // 默认返回
-    return new Response(JSON.stringify({ error: 'Auth endpoint not found: ' + path }), {
+    return new Response(JSON.stringify({ 
+      error: 'Auth endpoint not found',
+      message: `Endpoint /auth/v1/${path} not found` 
+    }), {
       status: 404,
       headers: { 
         'Content-Type': 'application/json',
