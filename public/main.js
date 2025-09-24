@@ -118,17 +118,19 @@ function createSupabaseClient() {
 
 // 发送请求到 Worker
 async function sendRequest(method, path, data = null) {
-  // 处理认证端点的特殊路径
-  let apiPath = path;
+  let apiPath;
+  
+  // 根据路径类型决定路由
   if (path.startsWith('auth/')) {
-    // 认证请求直接使用 /auth/v1/ 路径
+    // 认证请求路由到 /auth/v1/[path].js
     apiPath = path.replace('auth/', 'auth/v1/');
   } else {
-    // 数据请求使用 /api/ 前缀
-    apiPath = `api/${path}`;
+    // 数据请求路由到 /api/[table].js
+    apiPath = path;
   }
   
-  let url = `${WORKER_URL ? WORKER_URL : ''}/${apiPath}`;
+  // 构建完整URL
+  let url = `${WORKER_URL}/${apiPath}`;
   
   const options = {
     method: method,
@@ -2925,5 +2927,6 @@ function initToggleButtonPositioning() {
   updateButtonPosition();// 初始位置
 
 }
+
 
 
