@@ -2,7 +2,7 @@
 export async function onRequest(context) {
   const { request, env, params } = context;
   
-  // 处理 path 参数（可能是数组）
+  // 处理 path 参数
   let path = params.path;
   if (Array.isArray(path)) {
     path = path.join('/');
@@ -19,20 +19,17 @@ export async function onRequest(context) {
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
   };
 
-  // 处理 OPTIONS 预检请求
   if (method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // 检查环境变量是否存在
     const supabaseUrl = env.SUPABASE_URL;
     const supabaseKey = env.SUPABASE_KEY;
     
     if (!supabaseUrl || !supabaseKey) {
       return new Response(JSON.stringify({ 
-        error: 'Server configuration error',
-        message: 'Missing required environment variables'
+        error: 'Server configuration error'
       }), {
         status: 500,
         headers: { 
@@ -42,16 +39,14 @@ export async function onRequest(context) {
       });
     }
 
-    // 构建 Supabase Auth API URL
     const authApiUrl = `${supabaseUrl}/auth/v1`;
 
-    // 获取请求体
     let body = null;
     if (['POST', 'PATCH'].includes(method)) {
       try {
         body = await request.json();
       } catch (e) {
-        return new Response(JSON.stringify({ error: 'Invalid JSON in request body' }), {
+        return new Response(JSON.stringify({ error: 'Invalid JSON' }), {
           status: 400,
           headers: { 
             'Content-Type': 'application/json',
@@ -63,19 +58,6 @@ export async function onRequest(context) {
 
     // 登录处理
     if (path === 'login' && method === 'POST') {
-      if (!body || !body.email || !body.password) {
-        return new Response(JSON.stringify({ 
-          error: 'Missing credentials',
-          message: 'Email and password are required' 
-        }), {
-          status: 400,
-          headers: { 
-            'Content-Type': 'application/json',
-            ...corsHeaders 
-          }
-        });
-      }
-
       const authResponse = await fetch(`${authApiUrl}/token?grant_type=password`, {
         method: 'POST',
         headers: {
@@ -83,10 +65,7 @@ export async function onRequest(context) {
           'apikey': supabaseKey,
           'Authorization': `Bearer ${supabaseKey}`
         },
-        body: JSON.stringify({
-          email: body.email,
-          password: body.password
-        })
+        body: JSON.stringify(body)
       });
 
       if (!authResponse.ok) {
@@ -104,7 +83,6 @@ export async function onRequest(context) {
       }
 
       const data = await authResponse.json();
-      
       return new Response(JSON.stringify(data), {
         headers: { 
           'Content-Type': 'application/json',
@@ -150,7 +128,6 @@ export async function onRequest(context) {
       }
 
       const data = await userResponse.json();
-      
       return new Response(JSON.stringify(data), {
         headers: { 
           'Content-Type': 'application/json',
@@ -159,52 +136,9 @@ export async function onRequest(context) {
       });
     }
 
-    // 退出登录
-    if (path === 'logout' && method === 'POST') {
-      const authHeader = request.headers.get('Authorization');
-      
-      if (!authHeader) {
-        return new Response(JSON.stringify({ error: 'Missing authorization header' }), {
-          status: 401,
-          headers: { 
-            'Content-Type': 'application/json',
-            ...corsHeaders 
-          }
-        });
-      }
-      
-      const logoutResponse = await fetch(`${authApiUrl}/logout`, {
-        method: 'POST',
-        headers: {
-          'apikey': supabaseKey,
-          'Authorization': authHeader,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (!logoutResponse.ok) {
-        const errorData = await logoutResponse.json();
-        return new Response(JSON.stringify({ error: data.message || 'Failed to logout' }), {
-          status: logoutResponse.status,
-          headers: { 
-            'Content-Type': 'application/json',
-            ...corsHeaders 
-          }
-        });
-      }
-      
-      return new Response(JSON.stringify({ message: 'Successfully signed out' }), {
-        headers: { 
-          'Content-Type': 'application/json',
-          ...corsHeaders 
-        }
-      });
-    }
-
-    // 默认返回
     return new Response(JSON.stringify({ 
       error: 'Auth endpoint not found',
-      message: `Endpoint /auth/v1/${path} not found` 
+      message: `Endpoint ${path} not found` 
     }), {
       status: 404,
       headers: { 
@@ -214,8 +148,6 @@ export async function onRequest(context) {
     });
 
   } catch (error) {
-    console.error('Auth Function error:', error);
-    
     return new Response(JSON.stringify({ 
       error: 'Internal server error',
       message: error.message
