@@ -1,7 +1,14 @@
 // functions/[[table]].js
 export async function onRequest(context) {
   const { request, env, params } = context;
-  const table = params.table || '';
+  
+  // 处理 table 参数（可能是数组）
+  let table = params.table;
+  if (Array.isArray(table)) {
+    table = table.join('/');
+  }
+  table = table || '';
+
   const url = new URL(request.url);
   const method = request.method;
 
@@ -23,11 +30,7 @@ export async function onRequest(context) {
     const supabaseKey = env.SUPABASE_KEY;
     
     if (!supabaseUrl || !supabaseKey) {
-      console.error('Missing environment variables:', {
-        hasSupabaseUrl: !!supabaseUrl,
-        hasSupabaseKey: !!supabaseKey
-      });
-      
+      console.error('Missing environment variables');
       return new Response(JSON.stringify({ 
         error: 'Server configuration error',
         message: 'Missing required environment variables'
@@ -40,10 +43,44 @@ export async function onRequest(context) {
       });
     }
 
-    // 检查是否是认证路由
-    if (table.startsWith('auth/')) {
-      return new Response(JSON.stringify({ error: 'Auth routes should be accessed via /auth/v1/' }), {
+    // 检查是否是认证路由（重定向到正确的处理函数）
+    if (table.startsWith('auth/') || table === 'auth') {
+      return new Response(JSON.stringify({ 
+        error: 'Use /auth/v1/ for authentication endpoints',
+        message: 'Authentication routes should be accessed via /auth/v1/' 
+      }), {
         status: 404,
+        headers: { 
+          'Content-Type': 'application/json',
+          ...corsHeaders 
+        }
+      });
+    }
+
+    // 检查是否是 v1/login 等错误路由
+    if (table.startsWith('v1/')) {
+      return new Response(JSON.stringify({ 
+        error: 'Invalid API path',
+        message: 'Authentication routes should be accessed via /auth/v1/' 
+      }), {
+        status: 404,
+        headers: { 
+          'Content-Type': 'application/json',
+          ...corsHeaders 
+        }
+      });
+    }
+
+    // 如果 table 为空，返回可用端点信息
+    if (!table) {
+      return new Response(JSON.stringify({
+        message: 'Available endpoints:',
+        endpoints: {
+          authentication: '/auth/v1/login, /auth/v1/user, etc.',
+          data_tables: '/sales_records, /longqiao_records, etc.',
+          debug: '/debug'
+        }
+      }), {
         headers: { 
           'Content-Type': 'application/json',
           ...corsHeaders 
@@ -124,8 +161,7 @@ export async function onRequest(context) {
     
     return new Response(JSON.stringify({ 
       error: 'Internal server error',
-      message: error.message,
-      stack: error.stack
+      message: error.message
     }), {
       status: 500,
       headers: { 
