@@ -190,8 +190,21 @@ async function sendRequest(method, path, data = null) {
       }
       throw new Error(errorData.error || errorData.message || `HTTP error! status: ${response.status}`);
     }
-    
-    const responseData = await response.json();
+
+    // 对于退出操作，可能返回空响应或非JSON响应
+    if (apiPath === 'auth/v1/logout') {
+      // 退出操作可能不返回JSON，检查Content-Type
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const responseData = await response.json();
+        return responseData;
+      } else {
+        // 对于退出操作，返回成功消息
+        return { message: 'Successfully signed out' };
+      }
+    }
+       
+    const responseData = await response.json(); // 处理响应数据
     
     // 特殊处理 getUser 响应
     if (apiPath === 'auth/v1/user') {
@@ -342,6 +355,31 @@ async function initAuth() {
       userStatus.style.display = 'none';
       authContainer.style.display = 'block';
       return false;
+    }
+
+    // 只有在有token的情况下才尝试获取用户信息
+    // 解析token以检查是否有效
+    let parsedToken;
+    try {
+      parsedToken = JSON.parse(token);
+    } catch (parseError) {
+      // token格式错误，清除它
+      localStorage.removeItem('supabase.auth.token');
+      userStatus.style.display = 'none';
+      authContainer.style.display = 'block';
+      return false;
+    }
+
+    // 检查token是否过期（如果存在过期时间）
+    if (parsedToken.expires_at) {
+      const currentTime = Math.floor(Date.now() / 1000);
+      if (parsedToken.expires_at < currentTime) {
+        // token已过期，清除它
+        localStorage.removeItem('supabase.auth.token');
+        userStatus.style.display = 'none';
+        authContainer.style.display = 'block';
+        return false;
+      }
     }
 
     // 使用token获取用户信息
