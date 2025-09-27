@@ -173,7 +173,7 @@ async function sendRequest(method, path, data = null) {
       url = `${url}?${queryParams.join('&')}`;
     }
   } else if (data && method !== 'GET') {
-    options.body = JSON.stringify(data);
+    options.body = data ? JSON.stringify(data) : '{}'; // 关键修复：空对象而不是 undefined
   }
   
   try {
@@ -2974,3 +2974,4 @@ function initToggleButtonPositioning() {
   updateButtonPosition();// 初始位置
 
 }
+
