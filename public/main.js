@@ -1,5 +1,4 @@
 // ============== 1. 初始化部分 ==============
-// Supabase客户端初始化
 const WORKER_URL = ''; // 使用相对路径，Pages Functions 会自动处理路由
 let supabaseClient;
 
@@ -116,30 +115,30 @@ function createSupabaseClient() {
   };
 }
 
-// 发送请求到 Worker
+// 通用请求函数，添加缓存控制
 async function sendRequest(method, path, data = null) {
-  let apiPath;
+  // 添加缓存控制
+  const cacheControl = method === 'GET' ? 'no-cache' : 'no-store';
   
-  // 根据路径类型决定路由
+  // 构建完整URL
+  let apiPath;
   if (path.startsWith('auth/')) {
-    // 认证请求直接路由到 /auth/v1/[path]
     apiPath = path.replace('auth/', 'auth/v1/');
   } else {
-    // 数据请求路由到 /api/[path]
     apiPath = `api/${path}`;
   }
   
-  // 构建完整URL（使用相对路径）
   let url = `/${apiPath}`;
   
   const options = {
     method: method,
     headers: {
       'Content-Type': 'application/json',
+      'Cache-Control': cacheControl
     },
   };
   
-  // 添加认证token（如果存在）
+  // 添加认证token
   const token = localStorage.getItem('supabase.auth.token');
   if (token) {
     try {
@@ -157,7 +156,6 @@ async function sendRequest(method, path, data = null) {
     const queryParams = [];
     for (const [key, value] of Object.entries(data)) {
       if (typeof value === 'object' && value !== null) {
-        // 处理范围查询（如日期范围）
         if (value.gte && value.lte) {
           queryParams.push(`${key}=gte.${value.gte}`);
           queryParams.push(`${key}=lte.${value.lte}`);
@@ -178,8 +176,6 @@ async function sendRequest(method, path, data = null) {
   }
   
   try {
-    console.log('Making request to:', url, options);
-    
     const response = await fetch(url, options);
     
     if (!response.ok) {
@@ -211,11 +207,17 @@ async function sendRequest(method, path, data = null) {
   }
 }
 
-try {
-  // 初始化 Supabase 客户端
-  supabaseClient = createSupabaseClient();
-} catch (error) {
-  showRoundedAlert('系统初始化失败，请刷新页面或联系管理员', 'error'); // 替换alert
+// 初始化Supabase客户端函数
+function initializeSupabaseClient() {
+  if (!supabaseClient) {
+    try {
+      // 初始化 Supabase 客户端
+      supabaseClient = createSupabaseClient();
+    } catch (error) {
+      showRoundedAlert('系统初始化失败，请刷新页面或联系管理员', 'error'); // 替换alert
+    }
+  }
+  return supabaseClient;
 }
 
 // ============== 2. DOM元素引用 ==============
@@ -323,8 +325,9 @@ function setDefaultDates() {
 }
 
 // **** 认证函数，用户状态显示****
-// 修改initAuth函数以正确处理用户认证状态
 async function initAuth() {
+  initializeSupabaseClient(); // 初始化 Supabase  
+
   if (!supabaseClient) {
     return false;
   }
@@ -2648,23 +2651,21 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    const signUpOptions = {
-      email,
-      password,
-      options: {
-        data: {}
-      }
-    };
-    
-    if (phone) {
-      signUpOptions.phone = phone;
-    }
-    
     try {
-      const { data, error } = await supabaseClient.auth.signUp(signUpOptions);
+      const { data, error } = await supabaseClient.auth.signUp({
+        email,
+        password,
+        phone,
+        options: {
+          data: {
+            // 可以添加额外的用户元数据
+            signup_source: 'web_app'
+          }
+        }
+      });
       
       if (error) {
-        showRoundedAlert(`注册失败: 该功能被禁止，请与管理员联系！`, 'error');
+        showRoundedAlert(`注册失败: ${error.message}`, 'error');
         return;
       }
       
@@ -2679,6 +2680,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       
       // 预填充登录表单
       loginEmail.value = email;
+      
     } catch (error) {
       showRoundedAlert(`注册异常: ${error.message}`, 'error');
     }
@@ -2690,20 +2692,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     const email = loginEmail.value;
     
     if (!email) {
-      showRoundedAlert('请输入您的邮箱', 'warning'); // 替换alert
+      showRoundedAlert('请输入您的邮箱', 'warning');
       return;
     }
     
-    const { data, error } = await supabaseClient.auth.resetPasswordForEmail(email, {
-      redirectTo: window.location.href // 使用当前页面作为回调
-    });
-    
-    if (error) {
-      showRoundedAlert(`发送重置邮件失败: ${error.message}`, 'error'); // 替换alert
-      return;
+    try {
+      const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`
+      });
+      
+      if (error) {
+        showRoundedAlert(`发送重置邮件失败: ${error.message}`, 'error');
+        return;
+      }
+      
+      showRoundedAlert('密码重置邮件已发送，请检查您的邮箱', 'success');
+    } catch (error) {
+      showRoundedAlert(`发送重置邮件失败: ${error.message}`, 'error');
     }
-    
-    showRoundedAlert('密码重置邮件已发送，请检查您的邮箱', 'success'); // 替换alert
   });
 }); 
 
@@ -2927,7 +2933,3 @@ function initToggleButtonPositioning() {
   updateButtonPosition();// 初始位置
 
 }
-
-
-
-
