@@ -172,8 +172,14 @@ async function sendRequest(method, path, data = null) {
     if (queryParams.length > 0) {
       url = `${url}?${queryParams.join('&')}`;
     }
-  } else if (data && method !== 'GET') {
-    options.body = data ? JSON.stringify(data) : '{}'; // 关键修复：空对象而不是 undefined
+  } else if (method !== 'GET') {
+      // 关键修复：确保请求体不为空
+      if (data === null || data === undefined) {
+          // 对于没有数据的请求，发送空对象
+          options.body = '{}';
+      } else {
+          options.body = JSON.stringify(data);
+      }
   }
   
   try {
@@ -2974,4 +2980,3 @@ function initToggleButtonPositioning() {
   updateButtonPosition();// 初始位置
 
 }
-
