@@ -99,12 +99,19 @@ export async function onRequest(context) {
             }
 
             const data = await authResponse.json();
-            return new Response(JSON.stringify(data), {
+            
+            // 设置 Cookie
+            const response = new Response(JSON.stringify(data), {
                 headers: {
                     'Content-Type': 'application/json',
                     ...corsHeaders
                 }
             });
+            
+            // 添加 Cookie 设置
+            response.headers.append('Set-Cookie', `Wj_S...=your-cookie-value; Path=/; HttpOnly; Secure; SameSite=Strict`);
+            
+            return response;
         }
 
         // 注册处理
