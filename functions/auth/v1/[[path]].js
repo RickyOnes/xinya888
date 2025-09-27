@@ -15,8 +15,7 @@ export async function onRequest(context) {
     const corsHeaders = {
         "Access-Control-Allow-Origin": "*",                  // 允许所有域名跨域访问
         "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS", // 允许的 HTTP 方法
-        "Access-Control-Allow-Headers": "Content-Type, Authorization",      // 允许的自定义头
-        "Access-Control-Max-Age": "86400",                   // 预检结果缓存时间（秒）
+        "Access-Control-Allow-Headers": "Content-Type, Authorization"    // 允许的自定义头
     };
 
     if (method === "OPTIONS") {
@@ -348,4 +347,5 @@ export async function onRequest(context) {
             }
         });
     }
+
 }
