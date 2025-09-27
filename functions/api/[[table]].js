@@ -96,19 +96,12 @@ export async function onRequest(context) {
       }
 
       const data = await response.json();
-      
-      // 创建响应并设置 Cookie
-      const resultResponse = new Response(JSON.stringify(data), {
+      return new Response(JSON.stringify(data), {
         headers: { 
           'Content-Type': 'application/json',
           ...corsHeaders 
         }
       });
-      
-      // 设置 Cookie
-      resultResponse.headers.append('Set-Cookie', `Wj_S...=your-cookie-value; Path=/; HttpOnly; Secure; SameSite=Strict`);
-      
-      return resultResponse;
     }
 
     return new Response(JSON.stringify({ 
