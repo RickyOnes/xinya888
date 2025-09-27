@@ -178,6 +178,13 @@ async function sendRequest(method, path, data = null) {
   try {
     const response = await fetch(url, options);
     
+    // 检查响应中的 Cookie
+    const cookies = response.headers.get('Set-Cookie');
+    if (cookies) {
+      // 解析并设置 Cookie
+      document.cookie = cookies;
+    }
+    
     if (!response.ok) {
       let errorData;
       try {
