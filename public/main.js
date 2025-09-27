@@ -115,30 +115,30 @@ function createSupabaseClient() {
   };
 }
 
-// 通用请求函数，添加缓存控制
+// 通用请求函数
 async function sendRequest(method, path, data = null) {
-  // 添加缓存控制
-  const cacheControl = method === 'GET' ? 'no-cache' : 'no-store';
-  
-  // 构建完整URL
   let apiPath;
+  
+  // 根据路径类型决定路由
   if (path.startsWith('auth/')) {
+    // 认证请求直接路由到 /auth/v1/[path]
     apiPath = path.replace('auth/', 'auth/v1/');
   } else {
+    // 数据请求路由到 /api/[path]
     apiPath = `api/${path}`;
   }
   
+  // 构建完整URL（使用相对路径）
   let url = `/${apiPath}`;
   
   const options = {
     method: method,
     headers: {
       'Content-Type': 'application/json',
-      'Cache-Control': cacheControl
     },
   };
   
-  // 添加认证token
+  // 添加认证token（如果存在）
   const token = localStorage.getItem('supabase.auth.token');
   if (token) {
     try {
@@ -156,6 +156,7 @@ async function sendRequest(method, path, data = null) {
     const queryParams = [];
     for (const [key, value] of Object.entries(data)) {
       if (typeof value === 'object' && value !== null) {
+        // 处理范围查询（如日期范围）
         if (value.gte && value.lte) {
           queryParams.push(`${key}=gte.${value.gte}`);
           queryParams.push(`${key}=lte.${value.lte}`);
@@ -176,14 +177,9 @@ async function sendRequest(method, path, data = null) {
   }
   
   try {
-    const response = await fetch(url, options);
+    // console.log('Making request to:', url, options);
     
-    // 检查响应中的 Cookie
-    const cookies = response.headers.get('Set-Cookie');
-    if (cookies) {
-      // 解析并设置 Cookie
-      document.cookie = cookies;
-    }
+    const response = await fetch(url, options);
     
     if (!response.ok) {
       let errorData;
