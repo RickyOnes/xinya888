@@ -2987,7 +2987,13 @@ async function loadSalesData() {
   try {
     loadingEl.style.display = 'block';
     showLoadingOverlay();
-    
+    // 格式化为本地日期YYYY-MM-DD，避免UTC时间误差
+    const formatDate = (date) => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
     const selectedDates = flatpickrInstance.selectedDates;
     const startDate = formatDate(selectedDates[0]);
     const endDate = formatDate(selectedDates[1]);
@@ -3045,3 +3051,4 @@ async function load() {
     return Promise.reject(error);
   }
 }
+
