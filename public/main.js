@@ -52,8 +52,12 @@ function createSupabaseClient() {
             password: credentials.password
           });
           
-          // 存储token
+          // 存储token，并确保包含过期时间
           if (response.access_token) {
+            // 如果服务器没有提供过期时间，则设置默认1周
+            if (!response.expires_at) {
+              response.expires_at = Math.floor(Date.now() / 1000) + 604800;
+            }
             localStorage.setItem('supabase.auth.token', JSON.stringify(response));
           }
           
@@ -2993,7 +2997,8 @@ async function loadSalesData() {
       const month = String(date.getMonth() + 1).padStart(2, '0');
       const day = String(date.getDate()).padStart(2, '0');
       return `${year}-${month}-${day}`;
-    };
+    };    
+    
     const selectedDates = flatpickrInstance.selectedDates;
     const startDate = formatDate(selectedDates[0]);
     const endDate = formatDate(selectedDates[1]);
@@ -3051,4 +3056,3 @@ async function load() {
     return Promise.reject(error);
   }
 }
-
