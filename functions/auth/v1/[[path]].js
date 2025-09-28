@@ -107,6 +107,58 @@ export async function onRequest(context) {
             });
         }
 
+        // token 刷新或密码授权（代理 token 端点）
+        if (path === 'token' && method === 'POST') {
+            // 支持通过 query 参数指定 grant_type（如 ?grant_type=refresh_token）
+            const urlObj = new URL(request.url);
+            const grantType = urlObj.searchParams.get('grant_type') || '';
+
+            // 如果是 refresh_token，则 body 至少包含 refresh_token
+            if (grantType === 'refresh_token') {
+                if (!body || !body.refresh_token) {
+                    return new Response(JSON.stringify({ error: 'Missing refresh_token' }), {
+                        status: 400,
+                        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+                    });
+                }
+
+                const tokenResponse = await fetch(`${authApiUrl}/token?grant_type=refresh_token`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'apikey': supabaseKey,
+                        'Authorization': `Bearer ${supabaseKey}`
+                    },
+                    body: JSON.stringify({ refresh_token: body.refresh_token })
+                });
+
+                if (!tokenResponse.ok) {
+                    let errData = {};
+                    try { errData = await tokenResponse.json(); } catch (e) {}
+                    return new Response(JSON.stringify({ error: 'Token refresh failed', message: errData.error_description || errData.message || 'Failed to refresh token' }), {
+                        status: tokenResponse.status,
+                        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+                    });
+                }
+
+                const data = await tokenResponse.json();
+                // 计算 expires_at（以秒为单位）
+                if (data.expires_in) {
+                    data.expires_at = Math.floor(Date.now() / 1000) + Number(data.expires_in);
+                }
+
+                return new Response(JSON.stringify(data), {
+                    headers: { 'Content-Type': 'application/json', ...corsHeaders }
+                });
+            }
+
+            // 其他 grant_type（如 password）可代理到 supabase（保留原有 login 实现）
+            return new Response(JSON.stringify({ error: 'Unsupported grant_type' }), {
+                status: 400,
+                headers: { 'Content-Type': 'application/json', ...corsHeaders }
+            });
+        }
+
         // 注册处理
         if (path === 'signup' && method === 'POST') {
             if (!body || !body.email || !body.password) {
