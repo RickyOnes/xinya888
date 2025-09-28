@@ -1,3 +1,4 @@
+
 export async function onRequest(context) {
   const { request, env } = context;
   
@@ -31,7 +32,6 @@ export async function onRequest(context) {
     }
 
     // 解析前端查询参数
-    const queryParams = await request.json();
     const {
       startDate,
       endDate,
@@ -39,58 +39,57 @@ export async function onRequest(context) {
       selectedWarehouses = [],
       selectedBrands = [],
       selectedProducts = [],
-      selectedCustomers = []
-    } = queryParams;
+      selectedCustomers = [],
+      // 新增：只返回必要字段
+      fields = '*',
+      // 新增：聚合选项
+      aggregate = false
+    } = await request.json();
 
-    // 根据仓库类型选择表
     const table = warehouseType === 'longqiao' ? 'longqiao_records' : 'sales_records';
     
-    // 构建查询条件
-    let queryConditions = [`sale_date=gte.${startDate}`, `sale_date=lte.${endDate}`];
-    
-    // 添加筛选条件
+    // 1. 使用更高效的查询构建方式
+    let query = supabaseClient
+      .from(table)
+      .select(fields)
+      .gte('sale_date', startDate)
+      .lte('sale_date', endDate);
+
+    // 2. 批量添加筛选条件（减少查询复杂度）
     if (selectedWarehouses.length > 0) {
       const warehouseField = warehouseType === 'longqiao' ? 'sales' : 'warehouse';
-      queryConditions.push(`${warehouseField}=in.(${selectedWarehouses.join(',')})`);
+      query = query.in(warehouseField, selectedWarehouses);
     }
-    
+
     if (selectedBrands.length > 0) {
-      queryConditions.push(`brand=in.(${selectedBrands.join(',')})`);
+      query = query.in('brand', selectedBrands);
     }
-    
+
     if (selectedProducts.length > 0) {
-      queryConditions.push(`product_id=in.(${selectedProducts.join(',')})`);
+      query = query.in('product_id', selectedProducts);
     }
-    
+
     if (warehouseType === 'longqiao' && selectedCustomers.length > 0) {
-      queryConditions.push(`customer=in.(${selectedCustomers.join(',')})`);
+      query = query.in('customer', selectedCustomers);
     }
 
-    // 构建查询URL
-    const queryString = queryConditions.join('&');
-    const queryUrl = `${supabaseUrl}/rest/v1/${table}?select=*&${queryString}`;
+    // 3. 使用更高效的排序和限制
+    query = query.order('sale_date', { ascending: false })
+                .limit(50000); // 适当限制结果集大小
 
-    // 执行查询
-    const response = await fetch(queryUrl, {
-      headers: {
-        'apikey': supabaseKey,
-        'Authorization': `Bearer ${supabaseKey}`,
-        'Content-Type': 'application/json'
-      }
-    });
+    const { data, error } = await query;
 
-    if (!response.ok) {
-      throw new Error(`Supabase query failed: ${response.status}`);
-    }
+    if (error) throw error;
 
-    const data = await response.json();
+    // 4. 在服务端进行初步数据处理
+    const processedData = processDataOnServer(data, warehouseType);
 
-    // 返回处理好的数据
     return new Response(JSON.stringify({
       success: true,
-      data: data,
-      totalCount: data.length,
-      timestamp: new Date().toISOString()
+      data: processedData,
+      summary: aggregate ? generateSummary(processedData, warehouseType) : null,
+      totalCount: processedData.length,
+      queryTime: new Date().toISOString()
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
@@ -104,4 +103,38 @@ export async function onRequest(context) {
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
   }
+}
+
+// 服务端数据处理函数
+function processDataOnServer(data, warehouseType) {
+  // 移除不必要的字段，减少传输量
+  return data.map(item => {
+    const baseItem = {
+      sale_date: item.sale_date,
+      product_id: item.product_id,
+      product_name: item.product_name,
+      brand: item.brand,
+      quantity: item.quantity || 0
+    };
+
+    if (warehouseType === 'longqiao') {
+      return {
+        ...baseItem,
+        sales: item.sales,
+        customer: item.customer,
+        amount: item.amount || 0,
+        cost: item.cost || 0
+      };
+    } else {
+      return {
+        ...baseItem,
+        warehouse: item.warehouse,
+        unit_price: item.unit_price || 0,
+        pieces: item.pieces || 0,
+        returns: item.returns || 0,
+        inbounds: item.inbounds || 0,
+        difference: item.difference || 0
+      };
+    }
+  });
 }
