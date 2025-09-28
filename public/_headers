@@ -50,7 +50,7 @@
   Cache-Control: public, max-age=31536000, immutable
 
 /all.min.css
-  Cache-Control: public, max-age=86400
+  Cache-Control: public, max-age=31536000, immutable
 
 # =============================================
 # 第三方库缓存（从CDN加载的，不需要在这里配置）
@@ -61,9 +61,6 @@
 # =============================================
 # API 路由缓存设置
 # =============================================
-/auth/v1/user
-  Cache-Control: public, max-age=604800, stale-while-revalidate=86400
-
 /auth/v1/*
   Cache-Control: no-cache, no-store, must-revalidate
   Access-Control-Allow-Origin: *
