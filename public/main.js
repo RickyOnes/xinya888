@@ -422,7 +422,8 @@ async function initAuth() {
           const refreshResp = await fetch('/auth/v1/token?grant_type=refresh_token', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            credentials: 'include'
+            credentials: 'include',
+            body: JSON.stringify({})
           });
 
           if (!refreshResp.ok) {
@@ -2721,10 +2722,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
       }
      
-      user = response.user;
+      // response 可能只包含 access_token/expires_in；通过 /auth/v1/user 获取用户信息
+      try {
+        const userResp = await supabaseClient.auth.getUser();
+        if (userResp && userResp.data && userResp.data.user) {
+          user = userResp.data.user;
+        } else {
+          user = null; // 保底
+        }
+      } catch (e) {
+        console.error('Failed to fetch user after login:', e);
+        user = null;
+      }
       showRoundedAlert('登录成功！', 'success');
       // 显示用户状态 - 根据邮箱前缀映射到用户名
-      const emailPrefix = user.email.split('@')[0]; // 获取邮箱前缀
+      const emailPrefix = (user && user.email) ? user.email.split('@')[0] : '';
       const usernameMap = {
         '162004332': '系统管理员',
         'rickyone': '数据管理员',
@@ -2736,7 +2748,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       };
     
       // 如果邮箱前缀在映射表中，则使用映射的用户名，否则使用邮箱前缀
-      const displayName = usernameMap[emailPrefix] || emailPrefix;
+  const displayName = usernameMap[emailPrefix] || emailPrefix || '用户';
       userName.textContent = displayName;
       
       userStatus.style.display = 'block';
@@ -3064,7 +3076,8 @@ async function attemptRefreshAndRetry(url, originalOptions) {
     const refreshResponse = await fetch(envAuthUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include'
+      credentials: 'include',
+      body: JSON.stringify({}) // 发送空 JSON 正文，避免后端在声明 JSON 时解析失败
     });
 
     if (!refreshResponse.ok) {
