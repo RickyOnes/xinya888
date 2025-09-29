@@ -98,10 +98,30 @@ export async function onRequest(context) {
             }
 
             const data = await authResponse.json();
-            data.expires_at = Math.floor(Date.now() / 1000) + 604800; // 设置过期时间为1周
-            return new Response(JSON.stringify(data), {
+            // 计算 expires_at（以秒为单位），如果 supabase 返回 expires_in，则使用之
+            if (data.expires_in) {
+                data.expires_at = Math.floor(Date.now() / 1000) + Number(data.expires_in);
+            } else {
+                data.expires_at = Math.floor(Date.now() / 1000) + 604800; // 兜底1周
+            }
+
+            // 将 refresh_token 写入 HttpOnly, Secure cookie（前端无法读取），供后续刷新使用
+            const refreshToken = data.refresh_token || '';
+            // 设置 cookie 属性：HttpOnly, Secure, Path=/, SameSite=Lax, Max-Age 30天（可根据需要调整）
+            const maxAge = 60 * 60 * 24 * 30; // 30 天
+            const cookieStr = `refresh_token=${encodeURIComponent(refreshToken)}; HttpOnly; Secure; Path=/; Max-Age=${maxAge}; SameSite=Lax`;
+
+            // 不将 refresh_token 返回给前端 body（前端通过 cookie 自动处理刷新），但保留 access_token/expires_in
+            const respBody = {
+                access_token: data.access_token,
+                expires_in: data.expires_in,
+                token_type: data.token_type
+            };
+
+            return new Response(JSON.stringify(respBody), {
                 headers: {
                     'Content-Type': 'application/json',
+                    'Set-Cookie': cookieStr,
                     ...corsHeaders
                 }
             });
@@ -115,7 +135,19 @@ export async function onRequest(context) {
 
             // 如果是 refresh_token，则 body 至少包含 refresh_token
             if (grantType === 'refresh_token') {
-                if (!body || !body.refresh_token) {
+                // 支持从 HttpOnly cookie 或请求 body 中读取 refresh_token
+                let refresh_token = null;
+                if (body && body.refresh_token) refresh_token = body.refresh_token;
+                // 从 Cookie 读取
+                if (!refresh_token) {
+                    const cookieHeader = request.headers.get('cookie') || '';
+                    const match = cookieHeader.split(';').map(s => s.trim()).find(s => s.startsWith('refresh_token='));
+                    if (match) {
+                        refresh_token = decodeURIComponent(match.split('=')[1]);
+                    }
+                }
+
+                if (!refresh_token) {
                     return new Response(JSON.stringify({ error: 'Missing refresh_token' }), {
                         status: 400,
                         headers: { 'Content-Type': 'application/json', ...corsHeaders }
@@ -129,7 +161,7 @@ export async function onRequest(context) {
                         'apikey': supabaseKey,
                         'Authorization': `Bearer ${supabaseKey}`
                     },
-                    body: JSON.stringify({ refresh_token: body.refresh_token })
+                    body: JSON.stringify({ refresh_token })
                 });
 
                 if (!tokenResponse.ok) {
@@ -147,7 +179,27 @@ export async function onRequest(context) {
                     data.expires_at = Math.floor(Date.now() / 1000) + Number(data.expires_in);
                 }
 
-                return new Response(JSON.stringify(data), {
+                // 在刷新成功后，Supabase 可能会返回新的 refresh_token（轮换），把它写回 HttpOnly cookie
+                if (data.refresh_token) {
+                    const maxAge = 60 * 60 * 24 * 30; // 30 天
+                    const cookieStr = `refresh_token=${encodeURIComponent(data.refresh_token)}; HttpOnly; Secure; Path=/; Max-Age=${maxAge}; SameSite=Lax`;
+                    const respBody = {
+                        access_token: data.access_token,
+                        expires_in: data.expires_in,
+                        token_type: data.token_type
+                    };
+                    return new Response(JSON.stringify(respBody), {
+                        headers: { 'Content-Type': 'application/json', 'Set-Cookie': cookieStr, ...corsHeaders }
+                    });
+                }
+
+                // 如果没有新的 refresh_token，仍返回 access_token 信息（不包含 refresh_token）
+                const respBody = {
+                    access_token: data.access_token,
+                    expires_in: data.expires_in,
+                    token_type: data.token_type
+                };
+                return new Response(JSON.stringify(respBody), {
                     headers: { 'Content-Type': 'application/json', ...corsHeaders }
                 });
             }
@@ -306,11 +358,14 @@ export async function onRequest(context) {
                 });
             }
 
+            // 清除 HttpOnly refresh_token cookie（通过设置过期）
+            const clearCookie = `refresh_token=; HttpOnly; Secure; Path=/; Max-Age=0; SameSite=Lax`;
             return new Response(JSON.stringify({
                 message: 'Successfully signed out'
             }), {
                 headers: {
                     'Content-Type': 'application/json',
+                    'Set-Cookie': clearCookie,
                     ...corsHeaders
                 }
             });
