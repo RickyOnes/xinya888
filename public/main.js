@@ -165,6 +165,8 @@ async function sendRequest(method, path, data = null) {
     headers: {
       'Content-Type': 'application/json',
     },
+    // 让浏览器携带 HttpOnly cookie（refresh_token）用于刷新
+    credentials: 'include'
   };
   
   // 添加认证token（如果存在）
@@ -415,11 +417,49 @@ async function initAuth() {
     if (parsedToken.expires_at) {
       const currentTime = Math.floor(Date.now() / 1000);
       if (parsedToken.expires_at < currentTime) {
-        // token已过期，清除它
-        localStorage.removeItem('supabase.auth.token');
-        userStatus.style.display = 'none';
-        authContainer.style.display = 'block';
-        return false;
+        // token 已过期：尝试使用 HttpOnly cookie 中的 refresh_token 刷新一次
+        try {
+          const refreshResp = await fetch('/auth/v1/token?grant_type=refresh_token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include'
+          });
+
+          if (!refreshResp.ok) {
+            // 刷新失败，清除并返回登录
+            localStorage.removeItem('supabase.auth.token');
+            userStatus.style.display = 'none';
+            authContainer.style.display = 'block';
+            return false;
+          }
+
+          const newToken = await refreshResp.json();
+          if (newToken.access_token) {
+            if (newToken.expires_in) {
+              newToken.expires_at = Math.floor(Date.now() / 1000) + Number(newToken.expires_in);
+            }
+            const toStore = {
+              access_token: newToken.access_token,
+              expires_at: newToken.expires_at || parsedToken.expires_at,
+              token_type: newToken.token_type || parsedToken.token_type || 'bearer'
+            };
+            localStorage.setItem('supabase.auth.token', JSON.stringify(toStore));
+            // 替换 parsedToken 以继续后续 getUser
+            parsedToken = toStore;
+          } else {
+            // 未返回 access_token
+            localStorage.removeItem('supabase.auth.token');
+            userStatus.style.display = 'none';
+            authContainer.style.display = 'block';
+            return false;
+          }
+        } catch (err) {
+          console.error('Refresh during initAuth failed:', err);
+          localStorage.removeItem('supabase.auth.token');
+          userStatus.style.display = 'none';
+          authContainer.style.display = 'block';
+          return false;
+        }
       }
     }
 
@@ -3019,18 +3059,12 @@ function initToggleButtonPositioning() {
 // 尝试使用 refresh_token 刷新 access_token 并重试原请求一次
 async function attemptRefreshAndRetry(url, originalOptions) {
   try {
-    const tokenStr = localStorage.getItem('supabase.auth.token');
-    if (!tokenStr) return null;
-    let parsed;
-    try { parsed = JSON.parse(tokenStr); } catch { return null; }
-    if (!parsed.refresh_token) return null;
-
+    // 使用 HttpOnly cookie 中的 refresh_token（由后端写入），发起刷新请求（无需 body）
     const envAuthUrl = '/auth/v1/token?grant_type=refresh_token';
-    // 使用页面相对路由发起刷新请求到 Functions
     const refreshResponse = await fetch(envAuthUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refresh_token: parsed.refresh_token })
+      credentials: 'include'
     });
 
     if (!refreshResponse.ok) {
@@ -3045,9 +3079,13 @@ async function attemptRefreshAndRetry(url, originalOptions) {
       newTokenData.expires_at = Math.floor(Date.now() / 1000) + Number(newTokenData.expires_in);
     }
 
+    const tokenStr = localStorage.getItem('supabase.auth.token');
+    let parsed = {};
+    try { parsed = tokenStr ? JSON.parse(tokenStr) : {}; } catch {}
+
     const toStore = {
       access_token: newTokenData.access_token,
-      refresh_token: newTokenData.refresh_token || parsed.refresh_token,
+      // 不在 localStorage 保存 refresh_token（由 HttpOnly cookie 管理）
       expires_at: newTokenData.expires_at || parsed.expires_at,
       token_type: newTokenData.token_type || parsed.token_type || 'bearer'
     };
