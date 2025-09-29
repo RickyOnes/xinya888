@@ -11,11 +11,13 @@ export async function onRequest(context) {
 
     const method = request.method;
 
-    // CORS 头
+    // CORS 头 - 使用请求的 Origin 而不是通配符，以支持携带凭证（cookie）
+    const requestOrigin = request.headers.get('origin') || '*';
     const corsHeaders = {
-        "Access-Control-Allow-Origin": "*",                  // 允许所有域名跨域访问
-        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS", // 允许的 HTTP 方法
-        "Access-Control-Allow-Headers": "Content-Type, Authorization"     // 允许的自定义头
+        'Access-Control-Allow-Origin': requestOrigin,
+        'Access-Control-Allow-Credentials': 'true',
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization'
     };
 
     if (method === "OPTIONS") {
@@ -42,16 +44,23 @@ export async function onRequest(context) {
 
         let body = null;
         if (['POST', 'PATCH'].includes(method)) {
-            try {
-                body = await request.json();
-            } catch (e) {
-                return new Response(JSON.stringify({ error: 'Invalid JSON' }), {
-                    status: 400,
-                    headers: {
-                        'Content-Type': 'application/json',
-                        ...corsHeaders
-                    }
-                });
+            const contentType = (request.headers.get('content-type') || '').toLowerCase();
+            // 仅当请求明确为 JSON 时解析 body，避免对无 body 的 POST 返回 400
+            if (contentType.includes('application/json')) {
+                try {
+                    body = await request.json();
+                } catch (e) {
+                    return new Response(JSON.stringify({ error: 'Invalid JSON' }), {
+                        status: 400,
+                        headers: {
+                            'Content-Type': 'application/json',
+                            ...corsHeaders
+                        }
+                    });
+                }
+            } else {
+                // 非 JSON 请求（如 refresh 使用的空 POST），保持 body 为 null
+                body = null;
             }
         }
 
